@@ -1,0 +1,70 @@
+# =========================================
+# 開発用 docker-compose（GPU対応・任意）
+# - 目的：
+#   - 依存関係の再現性（uvで統一）
+#   - ローカル/CIで同一の実行環境を再現
+# - 前提：
+#   - Docker Desktop（WSL2推奨）
+#   - NVIDIAドライバ +（必要なら）NVIDIA Container Toolkit
+#   - GPUが不要な場合は gpus: all を削除しても動作可
+# =========================================
+services:
+  app:
+    build:
+      context: .
+      dockerfile: dockerfile
+    image: ml-quant:dev
+    working_dir: /workspace
+    # リポジトリをそのままマウント（編集→即反映）
+    volumes:
+      - .:/workspace # 変更点： '..' から '.' に変更
+      # uv のキャッシュを永続化して再インストール時間を短縮
+      - uv_cache:/root/.cache/uv
+      # データ出力ディレクトリを永続化（必要に応じて）
+      - data:/workspace/data
+    environment:
+      # 標準出力を即時に出す（ログの見やすさ向上）
+      - PYTHONUNBUFFERED=1
+      # uv の進捗表示を抑制（CIなどでログをすっきり）
+      - UV_NO_SYNC_PROGRESS=1
+    # GPU利用を許可（Compose v2 以降）
+    # - GPU不要ならこの行を削除
+    # gpus: all
+    # 常駐させて対話操作できるようにする
+    command: >
+      bash -lc "
+      echo 'Starting uv sync...' &&
+      uv sync &&
+      echo '依存関係の同期が完了しました。コンテナは準備完了です。' &&
+      echo 'Keeping container alive...' &&
+      tail -f /dev/null
+      "
+
+  # 任意：Jupyter Lab を使う場合のサービス
+  jupyter:
+    build:
+      context: .
+      dockerfile: dockerfile
+    image: ml-quant:dev
+    working_dir: /workspace
+    depends_on:
+      - app
+    volumes:
+      - .:/workspace # 変更点： '..' から '.' に変更
+      - uv_cache:/root/.cache/uv
+      - data:/workspace/data
+    # gpus: all
+    ports:
+      # ブラウザから http://localhost:8888 にアクセス
+      - "8888:8888"
+    command: >
+      bash -lc "
+      uv sync &&
+      python -m jupyter lab --ip=0.0.0.0 --no-browser --allow-root
+      --NotebookApp.token='' --NotebookApp.password=''
+      "
+
+volumes:
+  uv_cache:
+  data:
+
