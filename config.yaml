@@ -18,7 +18,7 @@ tickers:
   - PLTR
 
 # 取得開始日（ISO形式: YYYY-MM-DD）
-start: "2000-01-01"
+start: "2020-01-01"
 
 # 取得間隔（例: "1d"=日足, "1wk"=週足, "1mo"=月足）
 interval: "1d"

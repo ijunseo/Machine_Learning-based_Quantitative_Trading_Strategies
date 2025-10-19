@@ -1,15 +1,20 @@
 {
   "name": "ML Quant Project",
-  // 既存のdocker-compose.ymlファイルを使用するよう設定
+  // docker-compose.ymlファイルを使用するよう設定
   "dockerComposeFile": "../docker-compose.yml",
   
-  // 接続するサービス名を'app'に指定
+  // 'app'サービスを開発コンテナとして使用
   "service": "app",
   
-  // VS Codeで開くワークスペースのパス
+  // VS Codeで開かれるデフォルトのフォルダ
   "workspaceFolder": "/workspace",
 
-  // コンテナ内でVS Codeに自動的にインストールする拡張機能
+  // --- 自動化設定 ---
+  // コンテナが作成された「後」に自動で実行するコマンド
+  "postCreateCommand": "make sync",
+
+  // --- 開発の便宜機能 ---
+  // VS Codeに自動でインストールする拡張機能のリスト
   "customizations": {
     "vscode": {
       "extensions": [
@@ -18,9 +23,5 @@
         "charliermarsh.ruff"
       ]
     }
-  },
-
-  // コンテナ作成後に実行するコマンド
-  "postCreateCommand": "echo 'Dev Containerの準備ができました！'"
+  }
 }
-
