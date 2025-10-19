@@ -1,16 +1,16 @@
-Machine_Learning-based_Quantitative_Trading_Strategies
+# Machine_Learning-based_Quantitative_Trading_Strategies
 
-機械学習を用いたクオンツ戦略（Machine Learning-based Quantitative Trading Strategies）
+# 機械学習を用いたクオンツ戦略（Machine Learning-based Quantitative Trading Strategies）
 
-本リポジトリは、機械学習を活用したクオンツ（数量的）投資戦略の研究・実装を目的としています。
+本リポジトリは、**機械学習を活用したクオンツ（数量的）投資戦略**の研究・実装を目的としています。
 
 急速に変化する市場環境に適応し、データに基づいた投資判断の精度を高めるための
 
 多様な仮説立案・検証・モデル改善のプロセスを通じて、経済的知見とAI応用力を磨くことを目指します。
 
-🎯 目的（Goals）
+## 🎯 目的（Goals）
 
-🧑‍💻 Jun-Seo
+### 🧑‍💻 Jun-Seo
 
 機械学習を利用したクオンツ戦略を実践し、
 
@@ -18,62 +18,67 @@ Machine_Learning-based_Quantitative_Trading_Strategies
 
 多様な仮説と検証を繰り返しながらモデルを改善。
 
-その経験を通じて、経済的な洞察を深めるとともに、
+その経験を通じて、**経済的な洞察を深める**とともに、
 
 実際の株価やデータに影響を与える要素を理解・考察することを目的とする。
 
-💡 Hyun-Jin
+### 💡 Hyun-Jin
 
 経済的な知識にとどまらず、
 
-現在有望な技術である機械学習の解像度を高めることで、
+現在有望な技術である**機械学習の解像度を高める**ことで、
 
 投資戦略への多様なアプローチを体験。
 
 仮説を立て、検証を行うサイクルを通じて、
 
-AIおよびデータ分析の理解度を高めることを目指す。
+**AIおよびデータ分析の理解度を高める**ことを目指す。
 
-🚀 実行方法 (How to Run)
+## 🚀 実行方法 (How to Run)
 
 このプロジェクトは、DockerとVS CodeのDev Containerを利用して、誰でも数クリックで同じ開発環境を構築できるように設計されています。
 
-必要なもの (Prerequisites)
+### 必要なもの (Prerequisites)
 
-Docker Desktop: PC上でコンテナを実行するための必須ツールです。
+1. **Docker Desktop**: PC上でコンテナを実行するための必須ツールです。
+    
+2. **Visual Studio Code**: メインの開発エディタです。
+    
+3. **Dev Containers (拡張機能)**: VS Codeマーケットプレイスから`ms-vscode-remote.remote-containers`をインストールしてください。
+    
 
-Visual Studio Code: メインの開発エディタです。
+### 1. 開発環境のセットアップ (初回のみ)
 
-Dev Containers (拡張機能): VS Codeマーケットプレイスからms-vscode-remote.remote-containersをインストールしてください。
-
-1. 開発環境のセットアップ (初回のみ)
-
-リポジトリのクローン: まず、このリポジトリをローカルPCにクローンします。
-
-VS Codeでフォルダを開く: クローンしたプロジェクトフォルダをVS Codeで開きます。
-
-コンテナで再度開く:
-
-フォルダを開くと、VS Codeの右下に "Reopen in Container" というポップアップが表示されます。このボタンをクリックしてください。
-
-VS Codeが.devcontainerフォルダの設定を自動で読み込み、Dockerイメージのビルド、コンテナの実行、そしてPythonライブラリのインストール(make sync)までを全自動で行います。(初回は数分かかります)
+1. **リポジトリのクローン**: まず、このリポジトリをローカルPCにクローンします。
+    
+2. **VS Codeでフォルダを開く**: クローンしたプロジェクトフォルダをVS Codeで開きます。
+    
+3. **コンテナで再度開く**:
+    
+    - フォルダを開くと、VS Codeの右下に **"Reopen in Container"** というポップアップが表示されます。このボタンをクリックしてください。
+        
+    - VS Codeが`.devcontainer`フォルダの設定を自動で読み込み、Dockerイメージのビルド、コンテナの実行、そしてPythonライブラリのインストール(`make sync`)までを**全自動で**行います。(初回は数分かかります)
+        
 
 セットアップが完了すると、VS CodeはDockerコンテナ内部に直接接続された状態になります。VS Code内で開くターミナルは、Windows PowerShellではなく、開発に必要な全てのツールがインストールされたLinuxターミナルになります。
 
-2. データ取得と可視化
+### 2. データ取得と可視化
 
 全てのコマンドは、VS Code内のターミナル (`Ctrl + ``) で実行します。
 
-株価データの取得
+#### **株価データの取得**
 
-config.yamlファイルに定義されたティッカーリストに基づいて、株価データをダウンロードし、data/フォルダに.parquet形式で保存します。
+`config.yaml`ファイルに定義されたティッカーリストに基づいて、株価データをダウンロードし、`data/`フォルダに`.parquet`形式で保存します。
 
+```
 make fetch
+```
 
-
-データの可視化
+#### **データの可視化**
 
 取得したデータをもとに、特定のティッカーのインタラクティブな株価チャートを生成します。
 
+```
 # 例：テスラ(TSLA)のチャートを生成する場合
 make chart ticker=TSLA
+```
