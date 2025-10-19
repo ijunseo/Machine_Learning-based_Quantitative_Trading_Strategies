@@ -1,0 +1,16 @@
+# =========================================
+# VS Code Dev Container連携用のdocker-compose
+# =========================================
+services:
+  app:
+    build:
+      context: .
+      dockerfile: dockerfile
+    # イメージ名を変更し、以前のキャッシュとの衝突を防ぎます。
+    image: ml-quant:dev-final
+    working_dir: /workspace
+    volumes:
+      # 現在のプロジェクトフォルダをコンテナの/workspaceにマウントします。
+      - .:/workspace:cached
+    # コンテナを実行し続けるようにします。
+    command: sleep infinity
