@@ -52,55 +52,54 @@
     
 3. **Node.js / npm** (Dev Container CLI のインストールに必要)
     
-4. **Dev Container CLI**:
+4. **make** (Windows の場合は `choco install make` や `scoop install make` でインストール)
+    
+5. **Dev Container CLI**:
     
     ```
     npm install -g @devcontainers/cli
     ```
     
 
-#### 2. 環境構築 (プロジェクト初回のみ)
+#### 2. 環境構築 (プロジェクト初回のみ)w
 
 ホストOSのターミナル（PowerShell, iTermなど）から以下を実行します。
 
 ```
 # 1. リポジトリをクローン
 git clone https://github.com/ijunseo/Machine_Learning-based_Quantitative_Trading_Strategies
-
 cd Machine_Learning-based_Quantitative_Trading_Strategies
 
-# 2. Dev Container のビルドと起動
-devcontainer up --workspace-folder .
+# 2. Dev Container のビルドと起動 (make sync が自動実行されます)
+make up
 ```
 
-> **解説:** `up` コマンドは、`.devcontainer/devcontainer.json` の設定を読み込み、Dockerイメージのビルド 、コンテナの起動、さらに `postCreateCommand` (`make sync` ) の自動実行まで、全ての初期設定を全自動で行います。
+> **解説:** `make up` は、`.devcontainer/devcontainer.json` の設定を読み込み、Dockerイメージのビルド、コンテナの起動、さらに `postCreateCommand` (`make sync`) の自動実行まで、全ての初期設定を全自動で行います。
 
 #### 3. コマンドの実行 (開発時)
 
-ホストOSのターミナルから `devcontainer exec` を経由して、コンテナ内部の `make` コマンドを実行します。
+ホストOSのターミナルから、コンテナ内部のコマンドを意識せず、直接 `make` コマンドを実行します。
 
 **株価データの取得:**
 
 ```
-devcontainer exec --workspace-folder . make fetch
+make fetch
 ```
 
-_(内部動作: コンテナ内で `uv run python src/get_data/fetcher.py を実行)_
+_(内部動作: Host OS -> `devcontainer exec ... make fetch` -> Container -> `uv run python ...`)_
 
 **データの可視化:**
 
 ```
 # 例：テスラ(TSLA)のチャートを生成
-devcontainer exec --workspace-folder . make chart ticker=TSLA
+make chart ticker=TSLA
 ```
-
-_(内部動作: コンテナ内で `uv run python src/get_data/visualizer.py --ticker TSLA`  を実行)_
 
 **Lint と Format の実行:**
 
 ```
-devcontainer exec --workspace-folder . make lint
-devcontainer exec --workspace-folder . make format
+make lint
+make format
 ```
 
 ### (B) VS Code GUIベースの標準セットアップ (従来の方法)
@@ -109,29 +108,30 @@ VS Code の Dev Containers 拡張機能の GUI を使用して環境をセット
 
 #### 1. 必要なもの (Prerequisites)
 
-1. **Docker Desktop** 
+1. **Docker Desktop**
     
-2. **Visual Studio Code** 
+2. **Visual Studio Code**
     
-3. **Dev Containers (拡張機能)**  (ID: `ms-vscode-remote.remote-containers`)
+3. **Dev Containers (拡張機能)** (ID: `ms-vscode-remote.remote-containers`)
     
 
 #### 2. 開発環境のセットアップ (初回のみ)
 
-1. **リポジトリのクローン:** まず、このリポジトリをローカルPCにクローンします。 
+1. **リポジトリのクローン:** まず、このリポジトリをローカルPCにクローンします。
     
 2. **VS Codeでフォルダを開く:** クローンしたプロジェクトフォルダを VS Code で開きます。
     
 3. **コンテナで再度開く:**
     
-    - フォルダを開くと、VS Code の右下に **"Reopen in Container"** というポップアップが表示されます。このボタンをクリックしてください。 
+    - フォルダを開くと、VS Code の右下に **"Reopen in Container"** というポップアップが表示されます。このボタンをクリックしてください。
         
-    - VS Code が `.devcontainer` フォルダの設定を自動で読み込み、Dockerイメージのビルド、コンテナの実行、そしてPythonライブラリのインストール(`make sync` )までを**全自動で**行います。(初回は数分かかります) 
+    - VS Code が `.devcontainer` フォルダの設定を自動で読み込み、Dockerイメージのビルド、コンテナの実行、そしてPythonライブラリのインストール(`make sync`)までを**全自動で**行います。(初回は数分かかります)
         
 
 #### 3. データ取得と可視化
 
 セットアップが完了すると、VS Code は Docker コンテナ内部に直接接続された状態になります。**VS Code 内で開くターミナル** (`Ctrl + ``) で以下のコマンドを実行します。
+
 **株価データの取得:**
 
 ```
