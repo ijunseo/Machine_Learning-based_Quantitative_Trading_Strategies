@@ -1,92 +1,140 @@
 # =========================================================
-# スマートMakefile（ホスト/コンテナ自動判別）
-# - Host OS (Windows/Mac) と Dev Container 内部の両方で使用可能
+# Makefile for ML Quant Strategies (Dev Container compatible)
+#
+# This Makefile is "smart" and works on both:
+# (A) Inside the Dev Container / CI (Linux)
+# (B) On the Host OS (Windows/Mac)
+#
+# It detects where it's running and routes commands
+# into the container if necessary.
 # =========================================================
 
-# デフォルトターゲット（`make` だけで help を表示）
-.DEFAULT_GOAL := help
+# --- Tool Definitions ---
+# Use npx to reliably find the devcontainer CLI on Host OS
+# (Solves Windows PATH issues)
+DEVCONTAINER_CLI := npx devcontainer
 
-# uv コマンド (PATH経由で実行)
-UV := uv
+# --- Environment Detection (Robust Cross-Platform) ---
+# Check 1: Are we on Windows Host OS?
+ifeq ($(OS),Windows_NT)
+    IS_HOST_OS := true
+else
+    # We are on a Unix-like system (Linux, Mac, Container, CI)
+    IS_HOST_OS := false
+    
+    # Check 2: Are we specifically INSIDE the container or in CI?
+    # We use `test -f /.dockerenv` which is reliable inside containers.
+    # We add CI check for GitHub Actions.
+    ifneq ($(shell test -f /.dockerenv && echo true), true)
+        ifeq ($(CI), true)
+            # We are in CI
+            IS_IN_CONTAINER_OR_CI := true
+        else
+            # We are on Mac/Linux Host OS, not in container
+            IS_IN_CONTAINER_OR_CI := false
+        endif
+    else
+        # We are inside the Dev Container
+        IS_IN_CONTAINER_OR_CI := true
+    endif
+endif
 
-# --- コンテナ内部で実行されているか確認 ---
-# devcontainerが自動的に設定する環境変数
-# これがtrueなら、コンテナ内部と判断
-IS_IN_CONTAINER := $(shell echo $${REMOTE_CONTAINERS:-false})
+# Final Logic:
+# If OS is Windows, we are definitely HOST.
+# If OS is Unix, use the detailed check.
+ifeq ($(IS_HOST_OS), true)
+    IS_IN_CONTAINER_OR_CI := false
+endif
 
-# 'make chart ticker=TSLA' のような引数を正しく渡すための処理
-# $@ (ターゲット名 'chart') を除外し、'ticker=TSLA' のみを取得
-ARGS = $(filter-out $@,$(MAKECMDGOALS))
+# --- Target Definitions ---
 
-.PHONY: help up ssh sync fetch chart lint format fmt
+# (A) CONTAINER / CI LOGIC
+# Executed if running INSIDE the Dev Container or in GitHub Actions CI
+ifeq ($(IS_IN_CONTAINER_OR_CI), true)
 
-# 'ifeq' でホストOSかコンテナ内部かを分岐
-ifeq ($(IS_IN_CONTAINER), true)
+.PHONY: help sync fetch chart lint format fmt format-check up ssh
 
-# ===============================================
-# (A) コンテナ内部での実行時 (IS_IN_CONTAINER=true)
-# (uv run コマンドを直接実行)
-# ===============================================
 help:
-	@echo "Targets (Running INSIDE Container):"
-	@echo "  sync          - 依存関係を同期"
-	@echo "  fetch         - 日次データを取得"
-	@echo "  chart ticker=... - チャートを生成"
-	@echo "  lint          - Lint 実行"
-	@echo "  format / fmt  - コード整形"
+	@echo "--- Inside Container ---"
+	@echo "Usage: make [target]"
+	@echo "Targets:"
+	@echo "  sync          - Sync Python dependencies (uv sync --all-extras)"
+	@echo "  fetch         - Fetch daily stock data"
+	@echo "  chart ticker= - Generate a chart (e.g., make chart ticker=TSLA)"
+	@echo "  lint          - Run linter (ruff check)"
+	@echo "  format        - Format code (ruff format)"
+	@echo "  fmt           - Alias for format"
+	@echo "  format-check  - (CI) Check formatting without changing files"
 
 sync:
-	@echo "コンテナ内でPythonの依存関係を'uv.lock'に基づいて同期します..."
-	$(UV) sync
-	@echo "✅ 同期が完了しました。"
+	@echo "Syncing Python dependencies inside container based on 'uv.lock' (including dev)..."
+	uv sync --all-extras
+	@echo "Sync complete."
 
 fetch:
-	@echo "コンテナ内で日次の株価データを取得します..."
-	$(UV) run python src/get_data/fetcher.py
+	uv run python src/get_data/fetcher.py
 
 chart:
-	@echo "コンテナ内で $(ticker) のチャートを生成します..."
-	$(UV) run python src/get_data/visualizer.py --ticker $(ticker)
+	@echo "Generating chart for $(ticker)..."
+	uv run python src/get_data/visualizer.py --ticker $(ticker)
 
 lint:
-	$(UV) run ruff check .
+	@echo "Running Linter..."
+	uv run ruff check .
 
 format:
-	$(UV) run ruff format .
+	@echo "Running Formatter..."
+	uv run ruff format .
 
 fmt: format
-	@echo "Running format via fmt alias..."
 
-else
+format-check:
+	@echo "Running Formatter Check (CI)..."
+	uv run ruff format --check .
 
-# ===============================================
-# (B) ホストOSでの実行時 (IS_IN_CONTAINER=false)
-# (devcontainer exec 経由でコンテナに中継)
-# ===============================================
-help:
-	@echo "Targets (Running on HOST OS):"
-	@echo "  up            - [推奨] Dev Container をビルドして起動 (make sync 自動実行)"
-	@echo "  fetch         - (中継) 日次データを取得"
-	@echo "  chart ticker=... - (中継) チャートを生成"
-	@echo "  lint          - (中継) Lint 実行"
-	@echo "  format / fmt  - (中継) コード整形"
-	@echo "  sync          - (中継) 依存関係を同期"
-	@echo "  ssh           - (Utility) 実行中のコンテナにシェルで接続"
-
-# ホストOS専用ターゲット
 up:
-	@echo "Dev Container をビルドし、'make sync' を実行します..."
-	@devcontainer up --workspace-folder .
-	@echo "✅ コンテナの準備が完了しました。"
+	@echo "Command 'make up' is only available from Host OS."
 
 ssh:
-	@echo "実行中の 'app' サービスに接続します..."
-	@docker-compose exec app /bin/bash
+	@echo "Command 'make ssh' is only available from Host OS."
 
-# 'help', 'up', 'ssh' 以外のすべてのターゲットをキャッチ
-# これが 'make fetch', 'make chart ticker=TSLA' などを処理する
-%:
+# (B) HOST OS LOGIC (Windows/Mac/Linux)
+# Executed if running on the HOST OS.
+# Relays all commands into the container using the Dev Container CLI.
+else
+
+# Define all targets that need to be relayed.
+# This is more robust than a generic catch-all (%).
+.PHONY: help sync fetch chart lint format fmt format-check up ssh
+
+# Default target
+help:
+	@echo "--- On Host OS ---"
+	@echo "Usage: make [target]"
+	@echo "This will relay commands into the running Dev Container."
+	@echo "Targets:"
+	@echo "  up            - (First time) Build and start the Dev Container"
+	@echo "  sync          - Sync Python dependencies (inside container)"
+	@echo "  fetch         - Fetch daily stock data (inside container)"
+	@echo "  chart ticker= - Generate a chart (e.g., make chart ticker=TSLA)"
+	@echo "  lint          - Run linter (inside container)"
+	@echo "  format / fmt  - Format code (inside container)"
+	@echo "  ssh           - Get a shell inside the running container"
+
+# --- Host-specific Commands ---
+up:
+	@echo "Building Dev Container and running 'make sync'..."
+	$(DEVCONTAINER_CLI) up --workspace-folder .
+	@echo "Container is ready."
+
+ssh:
+	@echo "Opening shell in Dev Container..."
+	$(DEVCONTAINER_CLI) exec --workspace-folder . /bin/bash
+
+# --- Relayed Commands ---
+# All other targets are relayed into the container.
+sync fetch chart lint format fmt format-check:
 	@echo "--> [HOST] Relaying target '$@' with args '$(ARGS)' into Dev Container..."
-	@devcontainer exec --workspace-folder . make $@ $(ARGS)
+	$(DEVCONTAINER_CLI) exec --workspace-folder . make $@ $(ARGS)
 
 endif

@@ -37,8 +37,8 @@ dependencies = [
 
 # プロジェクトURL（任意）：レポジトリやドキュメント等に置き換え
 [project.urls]
-homepage = "https://github.com/<your-org-or-name>/<your-repo>"
-repository = "https://github.com/<your-org-or-name>/<your-repo>"
+homepage = "https://github.com/ijunseo/Machine_Learning-based_Quantitative_Trading_Strategies"
+repository = "https://github.com/ijunseo/Machine_Learning-based_Quantitative_Trading_Strategies"
 
 # 追加の開発用依存（`uv add --dev` で解決される。CIやローカル品質管理向け）
 [tool.uv]
@@ -56,6 +56,10 @@ viz = [
 # 強化学習（将来予定）：必要になったときに個別導入推奨（環境依存が強いため）
 rl = [
   "stable-baselines3>=2.3",
+]
+# Lint/Format (CI/Dev) - Issue #4, #6対応
+dev = [
+  "ruff>=0.5.0", # CI/Dev環境用のリンター＆フォーマッター
 ]
 
 # -------- Lint/Format 等（導入する場合。未導入なら削除可） --------
@@ -75,9 +79,7 @@ testpaths = ["tests"]
 # 1) uv のインストール（初回のみ）
 #    pipx install uv
 # 2) 依存解決
-#    uv sync
+#    uv sync --all-extras (dev環境を含む)
 # 3) データ取得
-#    uv run fetch
-# 4) 動作確認
-#    uv run run
+#    make fetch
 # ===============================
