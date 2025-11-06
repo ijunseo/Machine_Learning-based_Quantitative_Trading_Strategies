@@ -1,14 +1,15 @@
 # src/get_data/fetcher.py
 
-import yfinance as yf
-import yaml
 from pathlib import Path
-import pandas as pd
+
+import yaml
+import yfinance as yf
 
 # プロジェクトのルートディレクトリを基準にパスを設定
 # --- Set path based on the project root directory ---
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
 DATA_PATH = Path(__file__).resolve().parents[2] / "data"
+
 
 def load_config():
     """
@@ -18,11 +19,12 @@ def load_config():
     """
     print("設定ファイルを読み込んでいます...")
     # --- Loading configuration file... ---
-    with open(CONFIG_PATH, 'r') as f:
+    with open(CONFIG_PATH, "r") as f:
         config = yaml.safe_load(f)
     print("設定ファイルの読み込みが完了しました。")
     # --- Configuration file loaded successfully. ---
     return config
+
 
 def fetch_and_save_all():
     """
@@ -50,20 +52,22 @@ def fetch_and_save_all():
         try:
             print(f"--- {ticker}のデータを取得中... (期間: {start_date}〜, 間隔: {interval}) ---")
             # --- Fetching data for {ticker}... (Period: {start_date} to present, Interval: {interval}) ---
-            
+
             # yfinanceを使ってデータをダウンロード
             # --- Download data using yfinance ---
             data = yf.download(ticker, start=start_date, interval=interval, progress=False)
 
             if data.empty:
-                print(f"警告：{ticker}のデータが見つかりませんでした。ティッカーが正しいか確認してください。")
+                print(
+                    f"警告：{ticker}のデータが見つかりませんでした。ティッカーが正しいか確認してください。"
+                )
                 # --- Warning: No data found for {ticker}. Please check if the ticker is correct. ---
                 continue
-            
+
             # ファイルパスを定義
             # --- Define file path ---
             output_path = DATA_PATH / f"{ticker}.parquet"
-            
+
             # Parquet形式で保存
             # --- Save in Parquet format ---
             data.to_parquet(output_path)
@@ -76,6 +80,7 @@ def fetch_and_save_all():
 
     print("\nすべてのデータ取得処理が完了しました。")
     # --- All data fetching processes are complete. ---
+
 
 if __name__ == "__main__":
     fetch_and_save_all()
