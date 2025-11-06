@@ -40,44 +40,35 @@ dependencies = [
 homepage = "https://github.com/<your-org-or-name>/<your-repo>"
 repository = "https://github.com/<your-org-or-name>/<your-repo>"
 
-# 追加の開発用依存（`uv add --dev` で解決される。CIやローカル品質管理向け）
-[tool.uv]
-# scripts エイリアスは本環境の uv では未対応のため、明示的に `uv run python ...` を使用する
-# 例:
-#   uv run python scripts/fetch_daily.py
-#   uv run python -m app.main
-
-# -------- オプションのエクストラ依存関係（必要な人だけ `uv add '.[viz]'` のように使用） --------
+# -------- オプションのエクストラ依存関係 --------
 [project.optional-dependencies]
-# 可視化・報告周りを強化したい場合
+# (A) 可視化・報告周りを強化したい場合
 viz = [
-  "seaborn>=0.13",    # ※ 本プロジェクトではデフォルトはmatplotlib/plotly。好みで追加
+  "seaborn>=0.13",
 ]
-# 強化学習（将来予定）：必要になったときに個別導入推奨（環境依存が強いため）
+# (B) 強化学習（将来予定）
 rl = [
   "stable-baselines3>=2.3",
 ]
+# (C) 開発用ツール (Linter, Formatterなど)
+# `make sync` (uv sync --all-extras) で自動的にインストールされます
+dev = [
+  "ruff>=0.5.0", # Linter & Formatter
+]
 
-# -------- Lint/Format 等（導入する場合。未導入なら削除可） --------
+
+# -------- Lint/Format 等（ruff）--------
 [tool.ruff]
 # コードスタイル：プロジェクト事情に合わせて調整
 line-length = 100
 target-version = "py311"
+
+# Ruff v0.5.x+ の推奨設定 (lint セクションに移動)
+[tool.ruff.lint]
 extend-select = ["I"]   # import順序の自動整形など
 
+# -------- PyTest (導入する場合) --------
 [tool.pytest.ini_options]
 # PyTestの基本設定（必要に応じて編集）
 addopts = "-q"
 testpaths = ["tests"]
-
-# ===============================
-# 使い方メモ（READMEにも記載推奨）
-# 1) uv のインストール（初回のみ）
-#    pipx install uv
-# 2) 依存解決
-#    uv sync
-# 3) データ取得
-#    uv run fetch
-# 4) 動作確認
-#    uv run run
-# ===============================

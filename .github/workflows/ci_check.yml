@@ -1,0 +1,43 @@
+# .github/workflows/ci_check.yml
+# PRが作成・更新されるたびに自動でLintとFormatをチェックするワークフロー
+# (修正版Makefileを使用)
+
+name: Lint and Format Check (CI)
+
+on:
+  pull_request: # mainブランチへのPR時に実行
+    branches:
+      - main
+  push: # mainブランチへの直接プッシュ時も実行 (安全装置)
+    branches:
+      - main
+
+jobs:
+  lint-and-format-check:
+    runs-on: ubuntu-latest # GitHub Actionsが提供する標準のUbuntu環境を使用
+    
+    steps:
+      - name: 1. リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: 2. Python 3.11 のセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' 
+          
+      - name: 3. uv (パッケージマネージャー) のインストール
+        run: |
+          pip install uv
+
+      - name: 4. 依存関係のインストール (make sync)
+        run: make sync
+        # CI=true 環境なので、修正版Makefileは 
+        # (A)ロジック(uv sync)を直接実行します。
+
+      - name: 5. Lint チェックの実行
+        run: make lint
+
+      - name: 6. Format チェックの実行 (CI用)
+        run: make format-check
+        # フォーマットがずれている場合、ruff format --checkが失敗(Exit Code 1)を返し、
+        # PRを自動的にブロックします。
