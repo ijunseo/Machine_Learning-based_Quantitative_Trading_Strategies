@@ -102,6 +102,43 @@ make lint
 make format
 ```
 
+**実験設定の生成とデータ処理:**
+
+```bash
+# 全ティッカーの実験設定を生成
+make generate-experiments
+
+# 特定ティッカーのラベル付け
+make label ticker=TSLA
+
+# 特定ティッカーのデータ分割
+make split ticker=TSLA
+
+# 全ティッカーのフルパイプライン実行（設定生成→ラベル付け→分割）
+make full-pipeline
+```
+
+**設定のカスタマイズ:**
+
+ティッカーリストは `src/config_universe.yaml`、データ分割・ラベル設定は `src/data_split_labeling.yaml` を編集してください。
+
+```yaml
+# src/config_universe.yaml
+tickers:
+  - TSLA
+  - NVDA
+  # ... 追加・削除可能
+
+# src/data_split_labeling.yaml
+split:
+  batch_unit: 200          # 訓練データサイズ
+  horizon: 5               # テスト期間
+
+labeling:
+  upper_return: 0.03       # 利益確定 +3%
+  lower_return: -0.02      # 損切り -2%
+```
+
 ### (B) VS Code GUIベースの標準セットアップ (従来の方法)
 
 VS Code の Dev Containers 拡張機能の GUI を使用して環境をセットアップする方法です。
