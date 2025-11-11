@@ -15,7 +15,12 @@ split:
   latest_first: true
   
   # 出力ディレクトリ（ティッカー名が自動追加される）
-  save_dir: "data/splits"
+  save_dir: "data/splits/{ticker}"
+  input_data: data/processed/{ticker}_features_labeled.csv
+  date_column: Date
+  stats_columns:
+    - Returns
+    - Close
 
 labeling:
   # ラベル付けを有効化
@@ -41,3 +46,9 @@ labeling:
   
   # ニュートラルラベル(0)を含むか
   include_neutral: true
+  
+  # 入力データのパス（rawディレクトリのparquetファイル）
+  input_data: "data/raw/{ticker}.parquet"
+  
+  # 出力データのパス
+  output_data: "data/processed/{ticker}_features_labeled.csv"

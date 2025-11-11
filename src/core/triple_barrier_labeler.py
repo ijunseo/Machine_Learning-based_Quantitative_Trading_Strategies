@@ -18,25 +18,33 @@ Triple-Barrierの仕組み:
 """
 
 import argparse
+import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
-import yaml
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
-    """実験設定YAMLを読み込む.
+    """実験設定ファイル(JSON or YAML)を読み込む.
     
     Args:
-        config_path: 実験設定YAMLファイルのパス.
+        config_path: 実験設定ファイルのパス.
         
     Returns:
         設定内容の辞書.
     """
-    with open(config_path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+    path = Path(config_path)
+    
+    if path.suffix == '.json':
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    else:
+        # YAMLの場合
+        import yaml
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f)
 
 
 def triple_barrier_label(
@@ -106,19 +114,13 @@ def triple_barrier_label(
 
 
 def apply_labeling(
-    input_path: str,
-    output_path: str,
-    labeling_config: Dict[str, Any]
+    input_path: str, output_path: str, config: Dict[str, Any]
 ) -> None:
-    """データファイルにラベル付けを適用して保存.
-    
-    Args:
-        input_path: 入力CSVファイルのパス.
-        output_path: 出力CSVファイルのパス.
-        labeling_config: ラベル設定の辞書.
     """
-    # データ読み込み
-    df = pd.read_csv(input_path)
+    指定されたCSVファイルにTriple-Barrierラベリングを適用し、結果を保存する。
+    """
+    print(f"   📂 Parquetを読み込み中: {input_path}")
+    df = pd.read_parquet(input_path)
     
     # 日付列の処理
     if 'Date' in df.columns:
@@ -128,15 +130,15 @@ def apply_labeling(
     # ラベル生成
     labels = triple_barrier_label(
         df=df,
-        upper_return=labeling_config['upper_return'],
-        lower_return=labeling_config['lower_return'],
-        max_holding_days=labeling_config['max_holding_days'],
-        reference_column=labeling_config['reference_column'],
-        include_neutral=labeling_config['include_neutral']
+        upper_return=config['upper_return'],
+        lower_return=config['lower_return'],
+        max_holding_days=config['max_holding_days'],
+        reference_column=config['reference_column'],
+        include_neutral=config['include_neutral']
     )
     
     # ラベル列を追加
-    label_column = labeling_config.get('label_column', 'Label')
+    label_column = config.get('label_column', 'Label')
     df[label_column] = labels
     
     # 保存
@@ -146,11 +148,11 @@ def apply_labeling(
     
     # 統計情報を表示
     label_counts = df[label_column].value_counts().sort_index()
-    print(f"\n📊 Label Distribution:")
-    print(f"   Long (1):    {label_counts.get(1.0, 0):>6} samples")
-    print(f"   Short (-1):  {label_counts.get(-1.0, 0):>6} samples")
-    print(f"   Neutral (0): {label_counts.get(0.0, 0):>6} samples")
-    print(f"   NaN:         {df[label_column].isna().sum():>6} samples")
+    print(f"\n📊 ラベル分布:")
+    print(f"   Long (1):    {label_counts.get(1.0, 0):>6} サンプル")
+    print(f"   Short (-1):  {label_counts.get(-1.0, 0):>6} サンプル")
+    print(f"   Neutral (0): {label_counts.get(0.0, 0):>6} サンプル")
+    print(f"   NaN:         {df[label_column].isna().sum():>6} サンプル")
 
 
 def main() -> None:
@@ -163,7 +165,7 @@ def main() -> None:
         '--config',
         type=str,
         required=True,
-        help='実験設定YAMLファイルのパス（例: data/experiments/TSLA_experiment.yaml）'
+        help='実験設定ファイルのパス（例: data/experiments/TSLA_experiment.json）'
     )
     
     args = parser.parse_args()
@@ -174,21 +176,25 @@ def main() -> None:
     labeling_config = config['labeling']
     
     if not labeling_config.get('enabled', True):
-        print(f"⚠️  Labeling is disabled for {ticker}")
+        print(f"⚠️  {ticker} のラベリングは無効です")
         return
     
     print(f"🏷️  Triple-Barrier Labeling: {ticker}")
-    print(f"   Upper: +{labeling_config['upper_return']*100:.1f}%")
-    print(f"   Lower: {labeling_config['lower_return']*100:.1f}%")
-    print(f"   Max Days: {labeling_config['max_holding_days']}")
+    print(f"   上限: +{labeling_config['upper_return']*100:.1f}%")
+    print(f"   下限: {labeling_config['lower_return']*100:.1f}%")
+    print(f"   最大保有日数: {labeling_config['max_holding_days']}")
+    
+    # 入力パスの生成 (raw parquet)
+    input_path = labeling_config.get(
+        "input_data", "data/raw/{ticker}.parquet"
+    ).format(ticker=ticker)
+    
+    # 出力パスの生成
+    output_path = labeling_config['output_data'].format(ticker=ticker)
     
     # ラベル付け実行
-    input_path = labeling_config['input_data']
-    output_path = labeling_config['output_data']
-    
     apply_labeling(input_path, output_path, labeling_config)
-    
-    print(f"\n✅ Labels saved: {output_path}")
+    print(f"\n✅ ラベル保存完了: {output_path}")
 
 
 if __name__ == "__main__":

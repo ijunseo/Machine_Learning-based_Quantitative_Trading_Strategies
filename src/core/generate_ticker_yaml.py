@@ -1,7 +1,7 @@
-"""ティッカー別実験設定YAML自動生成モジュール.
+"""ティッカー別実験設定JSON自動生成モジュール.
 
 このモジュールは、config_universe.yamlに定義されたティッカーリストを元に、
-各ティッカー専用の実験設定YAMLファイルを自動生成します。
+各ティッカー専用の実験設定JSONファイルを自動生成します。
 
 典型的な使用例:
     $ python src/core/generate_ticker_yaml.py \\
@@ -11,6 +11,7 @@
 """
 
 import argparse
+import json
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -34,15 +35,15 @@ def load_yaml(filepath: str) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def save_yaml(data: Dict[str, Any], filepath: str) -> None:
-    """辞書をYAMLファイルとして保存.
+def save_json(data: Dict[str, Any], filepath: str) -> None:
+    """辞書をJSONファイルとして保存.
     
     Args:
         data: 保存するデータ（辞書形式）.
         filepath: 出力先ファイルパス.
     """
     with open(filepath, 'w', encoding='utf-8') as f:
-        yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def generate_ticker_config(
@@ -63,19 +64,24 @@ def generate_ticker_config(
     Returns:
         ティッカー専用の実験設定辞書.
     """
+    # テンプレートのパスを取得して {ticker} を置換
+    labeling_input = template['labeling'].get('input_data', 'data/raw/{ticker}.parquet')
+    labeling_output = template['labeling'].get('output_data', 'data/processed/{ticker}_features_labeled.csv')
+    split_input = template['split'].get('input_data', 'data/processed/{ticker}_features_labeled.csv')
+    
     config = {
         'ticker': ticker,
         'split': {
             **template['split'],
             'save_dir': f"{base_data_dir}/splits/{ticker}",
-            'input_data': f"{base_data_dir}/processed/{ticker}_features_labeled.csv",
+            'input_data': split_input.format(ticker=ticker),
             'date_column': 'Date',
             'stats_columns': ['Returns', 'Close']
         },
         'labeling': {
             **template['labeling'],
-            'input_data': f"{base_data_dir}/processed/{ticker}_features.csv",
-            'output_data': f"{base_data_dir}/processed/{ticker}_features_labeled.csv"
+            'input_data': labeling_input.format(ticker=ticker),
+            'output_data': labeling_output.format(ticker=ticker)
         }
     }
     return config
@@ -86,7 +92,7 @@ def generate_all_ticker_configs(
     template_path: str,
     output_dir: str
 ) -> List[str]:
-    """全ティッカーの実験設定YAMLを一括生成.
+    """全ティッカーの実験設定JSONを一括生成.
     
     Args:
         config_path: config_universe.yamlのパス.
@@ -115,9 +121,9 @@ def generate_all_ticker_configs(
             base_data_dir=universe.get('data_dir', 'data')
         )
         
-        # YAMLファイルとして保存
-        output_file = output_path / f"{ticker}_experiment.yaml"
-        save_yaml(config, str(output_file))
+        # JSONファイルとして保存
+        output_file = output_path / f"{ticker}_experiment.json"
+        save_json(config, str(output_file))
         generated_files.append(str(output_file))
         
         print(f"✅ Generated: {output_file}")
@@ -128,7 +134,7 @@ def generate_all_ticker_configs(
 def main() -> None:
     """CLIエントリーポイント."""
     parser = argparse.ArgumentParser(
-        description="ティッカー別実験設定YAMLを自動生成",
+        description="ティッカー別実験設定JSONを自動生成",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
