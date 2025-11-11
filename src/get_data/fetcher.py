@@ -1,85 +1,89 @@
-# src/get_data/fetcher.py
+"""株価データ取得モジュール.
+
+yfinanceを使用してティッカーの株価データを取得し、Parquet形式で保存します。
+
+典型的な使用例:
+    $ python src/get_data/fetcher.py
+"""
 
 from pathlib import Path
+from typing import Any, Dict, List
 
 import yaml
 import yfinance as yf
 
 # プロジェクトのルートディレクトリを基準にパスを設定
-# --- Set path based on the project root directory ---
-CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
-DATA_PATH = Path(__file__).resolve().parents[2] / "data"
+# CONFIG_PATH が src/config_universe.yaml に変更
+CONFIG_PATH = Path(__file__).resolve().parents[2] / "src" / "config_universe.yaml"
+DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "raw"
 
 
-def load_config():
+def load_config() -> Dict[str, Any]:
+    """config_universe.yaml ファイルを読み込んで設定を返す.
+
+    Returns:
+        設定内容の辞書.
+
+    Raises:
+        FileNotFoundError: 設定ファイルが存在しない場合.
     """
-    config.yaml ファイルを読み込んで設定を返す
-    ---
-    Loads and returns settings from config.yaml.
-    """
-    print("設定ファイルを読み込んでいます...")
-    # --- Loading configuration file... ---
-    with open(CONFIG_PATH, "r") as f:
+    print(f"設定ファイルを読み込んでいます: {CONFIG_PATH}")
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
     print("設定ファイルの読み込みが完了しました。")
-    # --- Configuration file loaded successfully. ---
     return config
 
 
-def fetch_and_save_all():
-    """
-    設定ファイルに基づいて全ティッカーの株価データを取得し、Parquet形式で保存する
-    ---
-    Fetches stock data for all tickers based on the config file and saves it in Parquet format.
+def fetch_and_save_all() -> None:
+    """設定ファイルに基づいて全ティッカーの株価データを取得し、Parquet形式で保存する.
+
+    config_universe.yamlからティッカーリスト、開始日、インターバルを読み込み、
+    各ティッカーのデータをyfinanceで取得してdata/raw/に保存します。
     """
     config = load_config()
-    tickers = config.get("tickers", [])
-    start_date = config.get("start", "2020-01-01")
-    interval = config.get("interval", "1d")
+    tickers: List[str] = config.get("tickers", [])
+    start_date: str = config.get("start", "2020-01-01")
+    interval: str = config.get("interval", "1d")
+    auto_adjust: bool = config.get("auto_adjust", False)
 
     if not tickers:
-        print("エラー：config.yamlにティッカーが指定されていません。")
-        # --- Error: No tickers specified in config.yaml. ---
+        print("エラー：config_universe.yamlにティッカーが指定されていません。")
         return
 
     # データ保存ディレクトリを作成
-    # --- Create data storage directory ---
-    DATA_PATH.mkdir(exist_ok=True)
+    DATA_PATH.mkdir(parents=True, exist_ok=True)
     print(f"データ保存先：'{DATA_PATH}'")
-    # --- Data will be saved to: '{DATA_PATH}' ---
 
     for ticker in tickers:
         try:
-            print(f"--- {ticker}のデータを取得中... (期間: {start_date}〜, 間隔: {interval}) ---")
-            # --- Fetching data for {ticker}... (Period: {start_date} to present, Interval: {interval}) ---
+            print(f"\n--- {ticker}のデータを取得中... (期間: {start_date}〜, 間隔: {interval}) ---")
 
             # yfinanceを使ってデータをダウンロード
-            # --- Download data using yfinance ---
-            data = yf.download(ticker, start=start_date, interval=interval, progress=False)
+            data = yf.download(
+                ticker, start=start_date, interval=interval, auto_adjust=auto_adjust, progress=False
+            )
 
             if data.empty:
                 print(
-                    f"警告：{ticker}のデータが見つかりませんでした。ティッカーが正しいか確認してください。"
+                    f"警告：{ticker}のデータが見つかりませんでした。"
+                    f"ティッカーが正しいか確認してください。"
                 )
-                # --- Warning: No data found for {ticker}. Please check if the ticker is correct. ---
                 continue
 
             # ファイルパスを定義
-            # --- Define file path ---
             output_path = DATA_PATH / f"{ticker}.parquet"
 
             # Parquet形式で保存
-            # --- Save in Parquet format ---
             data.to_parquet(output_path)
             print(f"✅ {ticker}のデータを'{output_path}'に保存しました。")
-            # --- ✅ Saved data for {ticker} to '{output_path}'. ---
+            print(f"   サンプル数: {len(data)}, 期間: {data.index[0]} ~ {data.index[-1]}")
 
         except Exception as e:
             print(f"エラー：{ticker}のデータ取得中に問題が発生しました：{e}")
-            # --- Error: An issue occurred while fetching data for {ticker}: {e} ---
 
-    print("\nすべてのデータ取得処理が完了しました。")
-    # --- All data fetching processes are complete. ---
+    print("\n" + "=" * 60)
+    print("すべてのデータ取得処理が完了しました。")
+    print("=" * 60)
 
 
 if __name__ == "__main__":

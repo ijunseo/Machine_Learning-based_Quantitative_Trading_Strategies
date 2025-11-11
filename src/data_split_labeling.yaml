@@ -1,0 +1,54 @@
+# データ分割とラベル付けの統合テンプレート
+# 各ティッカーの実験設定生成時のベーステンプレートとして使用
+
+split:
+  # 分割方式: rolling_horizon (固定ウィンドウ)
+  method: "rolling_horizon"
+  
+  # 各バッチの訓練データサンプル数
+  batch_unit: 200
+  
+  # テスト期間の長さ（サンプル数）
+  horizon: 5
+  
+  # 最新データから遡って分割するか
+  latest_first: true
+  
+  # 出力ディレクトリ（ティッカー名が自動追加される）
+  save_dir: "data/splits/{ticker}"
+  input_data: data/processed/{ticker}_features_labeled.csv
+  date_column: Date
+  stats_columns:
+    - Returns
+    - Close
+
+labeling:
+  # ラベル付けを有効化
+  enabled: true
+  
+  # ラベル付け方式: triple_barrier
+  method: "triple_barrier"
+  
+  # 上限バリア（利益確定）: +3%
+  upper_return: 0.03
+  
+  # 下限バリア（損切り）: -2%
+  lower_return: -0.02
+  
+  # 最大保有日数（時間バリア）
+  max_holding_days: 5
+  
+  # 価格参照列名
+  reference_column: "Close"
+  
+  # ラベル出力列名
+  label_column: "Label"
+  
+  # ニュートラルラベル(0)を含むか
+  include_neutral: true
+  
+  # 入力データのパス（rawディレクトリのparquetファイル）
+  input_data: "data/raw/{ticker}.parquet"
+  
+  # 出力データのパス
+  output_data: "data/processed/{ticker}_features_labeled.csv"

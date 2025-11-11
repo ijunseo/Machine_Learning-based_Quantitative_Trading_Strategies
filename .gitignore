@@ -209,3 +209,8 @@ __marimo__/
 
 *.parquet
 *.html
+
+# .gitignore に追加推奨
+data/splits/
+*.json
+*.csv

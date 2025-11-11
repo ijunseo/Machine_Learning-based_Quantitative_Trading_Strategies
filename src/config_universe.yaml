@@ -1,0 +1,25 @@
+# ティッカーユニバース設定ファイル
+# 調査対象のティッカーリストと共通パラメータを定義
+
+data_dir: "data"
+
+# 調査対象ティッカーリスト
+tickers:
+  - TSLA
+  - NVDA
+  - MSFT
+  - AAPL
+  - META
+  - GOOGL
+  - GOOG
+  - AMZN
+  - AMD
+  - LUNR
+  - RKLB
+  - NOW
+  - PLTR
+
+# データ取得パラメータ
+start: "2020-01-01"
+interval: "1d"
+auto_adjust: false
