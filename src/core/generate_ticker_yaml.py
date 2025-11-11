@@ -17,6 +17,9 @@ from typing import Any, Dict, List
 
 import yaml
 
+# インポートパスの更新
+from src.core.labeling.triple_barrier_labeler import TripleBarrierLabeler  # 変更箇所
+
 
 def load_yaml(filepath: str) -> Dict[str, Any]:
     """YAMLファイルを読み込む.

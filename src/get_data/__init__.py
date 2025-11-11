@@ -1,8 +1,8 @@
-"""データ取得モジュール.
+"""
+データ取得・可視化パッケージ
 
-yfinanceを使用した株価データの取得機能を提供します。
+Yahoo Financeからの株価データ取得、チャート生成機能を提供します。
 """
 
-from .fetcher import fetch_and_save_all, load_config
-
-__all__ = ["fetch_and_save_all", "load_config"]
+# 将来実装予定
+__all__ = []

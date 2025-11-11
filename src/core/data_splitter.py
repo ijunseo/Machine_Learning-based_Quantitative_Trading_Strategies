@@ -179,41 +179,60 @@ def print_fold_info(fold_idx: int, train_df: pd.DataFrame, test_df: pd.DataFrame
         print(f"[Fold {fold_idx}] Test:  N={len(test_df)}")
 
 
-def run_split(config: Dict[str, Any]) -> None:
-    """分割処理を実行."""
-    ticker = config["ticker"]
-    split_config = config["split"]
+class DataSplitter:
+    """データ分割クラス（Rolling Horizon方式）。
+    
+    Attributes:
+        config (Dict[str, Any]): 分割設定。
+    """
+    
+    def __init__(self, config: Dict[str, Any]) -> None:
+        """DataSplitterを初期化する。
+        
+        Args:
+            config: 分割設定辞書。
+        """
+        self.config = config
 
-    # データ読み込み
-    input_path = split_config["input_data"]
-    print(f"📂 Loading data: {input_path}")
-    df = pd.read_csv(input_path)
+    def split(self, data: pd.DataFrame) -> None:
+        """データを分割する。
+        
+        Args:
+            data: 分割対象のDataFrame。
+        """
+        ticker = self.config["ticker"]
+        split_config = self.config["split"]
 
-    # 日付列の処理
-    date_column = split_config.get("date_column", "Date")
-    if date_column in df.columns:
-        df[date_column] = pd.to_datetime(df[date_column])
-        df = df.sort_values(date_column).reset_index(drop=True)
+        # データ読み込み
+        input_path = split_config["input_data"]
+        print(f"📂 Loading data: {input_path}")
+        df = pd.read_csv(input_path)
 
-    print(f"\n{'=' * 60}")
-    print(f"Rolling Horizon Split: {ticker}")
-    print(f"  Batch Unit: {split_config['batch_unit']}")
-    print(f"  Horizon: {split_config['horizon']}")
-    print(f"  Latest First: {split_config.get('latest_first', True)}")
-    print(f"{'=' * 60}\n")
+        # 日付列の処理
+        date_column = split_config.get("date_column", "Date")
+        if date_column in df.columns:
+            df[date_column] = pd.to_datetime(df[date_column])
+            df = df.sort_values(date_column).reset_index(drop=True)
 
-    # 分割実行 (dfを渡す)
-    _ = rolling_horizon_split(
-        df=df,  # ← これが必要
-        batch_unit=split_config["batch_unit"],
-        horizon=split_config["horizon"],
-        latest_first=split_config.get("latest_first", True),
-        save_dir=split_config["save_dir"],
-        date_column=date_column,
-        stats_columns=split_config.get("stats_columns", ["Returns", "Close"]),
-    )
+        print(f"\n{'=' * 60}")
+        print(f"Rolling Horizon Split: {ticker}")
+        print(f"  Batch Unit: {split_config['batch_unit']}")
+        print(f"  Horizon: {split_config['horizon']}")
+        print(f"  Latest First: {split_config.get('latest_first', True)}")
+        print(f"{'=' * 60}\n")
 
-    print(f"\n✅ All splits saved to: {split_config['save_dir']}")
+        # 分割実行 (dfを渡す)
+        _ = rolling_horizon_split(
+            df=df,  # ← これが必要
+            batch_unit=split_config["batch_unit"],
+            horizon=split_config["horizon"],
+            latest_first=split_config.get("latest_first", True),
+            save_dir=split_config["save_dir"],
+            date_column=date_column,
+            stats_columns=split_config.get("stats_columns", ["Returns", "Close"]),
+        )
+
+        print(f"\n✅ All splits saved to: {split_config['save_dir']}")
 
 
 def main() -> None:
@@ -235,7 +254,8 @@ def main() -> None:
     config = load_config(args.config)
 
     # 分割実行
-    run_split(config)
+    splitter = DataSplitter(config)
+    splitter.split(None)  # dataは内部で読み込むため None
 
 
 if __name__ == "__main__":
