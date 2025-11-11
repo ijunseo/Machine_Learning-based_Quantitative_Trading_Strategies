@@ -1,0 +1,38 @@
+# Simple Neural Network の設定ファイル
+
+model:
+  name: "SimpleNN"
+  task: "classification"  # classification or regression
+  
+architecture:
+  input_dim: null  # 実行時に自動設定（特徴量数）
+  hidden_dims: [128, 64, 32]  # 隠れ層のユニット数
+  output_dim: 3  # Triple Barrier: -1, 0, 1 の3クラス
+  dropout: 0.3  # ドロップアウト率
+  activation: "relu"  # relu, tanh, sigmoid
+
+training:
+  batch_size: 32
+  epochs: 50
+  learning_rate: 0.001
+  optimizer: "adam"  # adam, sgd, rmsprop
+  weight_decay: 0.0001  # L2正則化
+  early_stopping:
+    enabled: true
+    patience: 10
+    min_delta: 0.001
+  
+loss:
+  function: "cross_entropy"  # cross_entropy, mse, mae
+
+device: "cpu"  # cpu or cuda
+
+# データ前処理
+preprocessing:
+  normalize: true  # 標準化を実行
+  handle_nan: "mean"  # mean, median, drop
+
+# 実験管理
+experiment:
+  seed: 42
+  log_interval: 10  # エポック単位でログ出力
