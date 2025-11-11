@@ -1,4 +1,10 @@
-# src/get_data/visualizer.py
+"""株価データ可視化モジュール.
+
+Parquet形式で保存された株価データを読み込み、ローソク足チャートを生成します。
+
+典型的な使用例:
+    $ python src/get_data/visualizer.py --ticker AAPL
+"""
 
 import argparse
 from pathlib import Path
@@ -13,9 +19,11 @@ DATA_PATH = BASE_PATH / "data"
 CHARTS_PATH = BASE_PATH / "charts"
 
 
-def visualize_stock_data(ticker: str):
-    """
-    指定されたティッカーのParquetデータを読み込み、ローソク足チャートを生成してHTMLファイルとして保存します。
+def visualize_stock_data(ticker: str) -> None:
+    """指定されたティッカーのローソク足チャートを生成してHTMLファイルとして保存する.
+    
+    Args:
+        ticker: ティッカーシンボル（例: "AAPL"）.
     """
     parquet_file = DATA_PATH / f"{ticker}.parquet"
 
@@ -76,7 +84,8 @@ def visualize_stock_data(ticker: str):
     print("ファイルを開いてインタラクティブなチャートを確認してください。")
 
 
-def main():
+def main() -> None:
+    """CLIエントリーポイント."""
     # --- CLI引数パーサーの設定 ---
     parser = argparse.ArgumentParser(description="指定されたティッカーの株価データを可視化します。")
     parser.add_argument(
