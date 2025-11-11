@@ -106,16 +106,7 @@ label:
 	  exit 1; \
 	fi
 	@echo "🏷️  Labeling data for $(ticker)..."
-	uv run python src/core/triple_barrier_labeler.py \
-	  --config data/experiments/$(ticker)_experiment.yaml
-
-split:
-	@if [ -z "$(ticker)" ]; then \
-	  echo "❌ Usage: make split ticker=TSLA"; \
-	  exit 1; \
-	fi
-	@echo "🔀 Splitting data for $(ticker)..."
-	uv run python src/core/data_splitter.py \
+	uv run python src/core/labeling/triple_barrier_labeler.py \
 	  --config data/experiments/$(ticker)_experiment.yaml
 
 full-pipeline: generate-experiments
@@ -127,7 +118,7 @@ full-pipeline: generate-experiments
 	  echo "Processing: $$ticker"; \
 	  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
 	  echo "Step 1/2: Labeling..."; \
-	  uv run python src/core/triple_barrier_labeler.py --config $$config || exit 1; \
+	  uv run python src/core/labeling/triple_barrier_labeler.py --config $$config || exit 1; \
 	  echo "Step 2/2: Splitting..."; \
 	  uv run python src/core/data_splitter.py --config $$config || exit 1; \
 	  echo "✅ $$ticker completed"; \

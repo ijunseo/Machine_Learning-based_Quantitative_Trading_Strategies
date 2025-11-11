@@ -221,22 +221,28 @@ Machine_Learning-based_Quantitative_Trading_Strategies/
 │   ├── raw/                           # 株価データ (Parquet)
 │   ├── processed/                     # ラベル付きデータ (CSV)
 │   ├── splits/                        # 訓練/テストセット
-│   │   └── {ticker}/
-│   │       ├── fold_1_train.csv
-│   │       ├── fold_1_test.csv
-│   │       └── stats.json             # 分割統計情報
 │   ├── charts/                        # 可視化チャート
 │   └── experiments/                   # ティッカー別実験設定 (JSON)
 ├── src/
 │   ├── core/
-│   │   ├── generate_ticker_yaml.py    # 実験設定生成
-│   │   ├── triple_barrier_labeler.py  # ラベリング
-│   │   └── data_splitter.py           # データ分割
+│   │   ├── __init__.py                # パッケージ初期化
+│   │   ├── labeling/                  # ラベリング機能
+│   │   │   ├── __init__.py
+│   │   │   └── triple_barrier_labeler.py
+│   │   ├── utils/                     # ユーティリティ
+│   │   │   ├── __init__.py
+│   │   │   └── io.py                  # I/O処理
+│   │   ├── data_splitter.py           # データ分割
+│   │   └── generate_ticker_yaml.py    # 実験設定生成
 │   ├── get_data/
+│   │   ├── __init__.py
 │   │   ├── fetcher.py                 # 株価取得
 │   │   └── visualizer.py              # チャート生成
+│   ├── models/                        # モデルパッケージ（将来用）
+│   │   ├── __init__.py
+│   │   └── base.py                    # BaseModelインターフェース
 │   ├── config_universe.yaml           # ティッカーリスト
-│   └── data_split_labeling.yaml       # パイプライン設定テンプレート
+│   └── data_split_labeling.yaml       # パイプライン設定
 ├── Makefile                           # タスク自動化
 ├── pyproject.toml                     # Python依存関係
 └── README.md
