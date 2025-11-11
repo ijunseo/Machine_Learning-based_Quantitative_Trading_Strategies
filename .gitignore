@@ -212,3 +212,5 @@ __marimo__/
 
 # .gitignore に追加推奨
 data/splits/
+*.json
+*.csv
