@@ -60,11 +60,7 @@ def fetch_and_save_all() -> None:
 
             # yfinanceを使ってデータをダウンロード
             data = yf.download(
-                ticker,
-                start=start_date,
-                interval=interval,
-                auto_adjust=auto_adjust,
-                progress=False
+                ticker, start=start_date, interval=interval, auto_adjust=auto_adjust, progress=False
             )
 
             if data.empty:
@@ -85,9 +81,9 @@ def fetch_and_save_all() -> None:
         except Exception as e:
             print(f"エラー：{ticker}のデータ取得中に問題が発生しました：{e}")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("すべてのデータ取得処理が完了しました。")
-    print("="*60)
+    print("=" * 60)
 
 
 if __name__ == "__main__":
