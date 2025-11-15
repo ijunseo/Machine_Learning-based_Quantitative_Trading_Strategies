@@ -15,20 +15,43 @@
 ## 🚀 クイックスタート
 
 ### 必須環境
-- **Docker Desktop** (起動済み)
-- **Git**
-- **make** (Windows: `choco install make` または `scoop install make`)
 
-### セットアップ
+1. **Git**
+
+2. **Docker Desktop** (必ず起動した状態にしてください)
+
+3. **Node.js / npm** (Dev Container CLI のインストールに必要)
+
+4. **make** (Windows の場合は `choco install make` や `scoop install make` でインストール)
+
+5. **Dev Container CLI**:
+
+    ```bash
+    npm install -g @devcontainers/cli
+    ```
+
+---
+
+### 環境構築 (プロジェクト初回のみ)
+
+ホストOSのターミナル（PowerShell, iTermなど）から以下を実行します。
 
 ```bash
 # 1. リポジトリをクローン
 git clone https://github.com/ijunseo/Machine_Learning-based_Quantitative_Trading_Strategies
 cd Machine_Learning-based_Quantitative_Trading_Strategies
 
-# 2. Dev Containerで開く (VS Code推奨)
-# VS Codeで開き、"Reopen in Container"をクリック
+# 2. Dev Container のビルドと起動 (make sync が自動実行されます)
+make up
 ```
+
+> **解説:** `make up` は、`.devcontainer/devcontainer.json` の設定を読み込み、Dockerイメージのビルド、コンテナの起動、さらに `postCreateCommand` (`make sync`) の自動実行まで、全ての初期設定を全自動で行います。
+
+---
+
+### コマンドの実行 (開発時)
+
+ホストOSのターミナルから、コンテナ内部のコマンドを意識せず、直接 `make` コマンドを実行します。
 
 ---
 
@@ -48,35 +71,58 @@ make fetch
 
 ---
 
-### 2. データの可視化
-
-```bash
-# 特定ティッカーのチャート生成
-make chart ticker=TSLA
-
-# 全ティッカーのチャート一括生成
-make chart-all
-```
-
-**出力先:** `data/charts/{ticker}_chart.png`
-
----
-
-### 3. フルパイプライン実行 (推奨)
+### 2. フルパイプライン実行 (推奨)
 
 以下のステップを自動実行します:
 1. 実験設定ファイル生成
 2. Triple-Barrierラベリング
-3. Rolling Horizon分割
+3. **CPCV (Combinatorial Purged Cross-Validation)** 分割
 
 ```bash
 make full-pipeline
 ```
 
 **実行内容:**
-- **設定生成:** 各ティッカーの実験設定YAML作成 (`data/experiments/`)
+- **設定生成:** 各ティッカーの実験設定JSON作成 (`data/experiments/`)
 - **ラベリング:** 株価データにラベル付与 (`data/processed/{ticker}_features_labeled.csv`)
-- **データ分割:** 訓練/テストセット作成 (`data/splits/{ticker}/`)
+- **データ分割:** CPCV方式で訓練/テストセット作成 (`data/splits/{ticker}/`)
+
+**CPCV設定 (デフォルト):**
+- ブロック数: 10
+- テストブロック数: 2
+- Purge Window: 5サンプル
+- Embargo Window: 3サンプル
+- **生成Folds:** C(10,2) = **45 folds/ticker**
+
+---
+
+### 3. データの可視化 (CPCV分割 + ラベリング結果)
+
+```bash
+# 特定ティッカーのインタラクティブチャート生成
+make chart ticker=TSLA
+```
+
+**出力先:** `data/charts/{ticker}_cpcv_chart.html`
+
+**可視化内容:**
+- 📊 **ローソク足チャート**: 株価の推移
+- 🟩 **Fold別Train期間**: 薄い色付き背景 (各foldで異なる色)
+- 🟥 **Fold別Test期間**: 濃い色付き背景 + 枠線
+- 🟢 **Long (Label=1)**: 緑の▲マーカー (上昇予測)
+- 🔴 **Short (Label=-1)**: 赤の▼マーカー (下降予測)
+- ⚪ **Neutral (Label=0)**: 灰色の●マーカー (横ばい予測)
+- 📈 **20日移動平均線**: オレンジの点線
+
+**使い方:**
+1. HTMLファイルをブラウザで開く
+2. ズーム/パンでインタラクティブに操作
+3. 各マーカーにマウスオーバーで詳細表示
+
+**チャート例 (AAPL):**
+- 総サンプル: 1477
+- Long: 97 | Short: 106 | Neutral: 92 | 保有中: 1182
+- **Folds: 45** (CPCV C(10,2) 組み合わせ)
 
 ---
 
@@ -111,7 +157,9 @@ make label-all
 
 **出力:** `data/processed/{ticker}_features_labeled.csv`
 
-#### 4.3 Rolling Horizon分割
+**重要:** t日目の特徴量を使ってt+1～t+5日の価格変動を予測（未来データリークなし）
+
+#### 4.3 CPCV分割
 
 ```bash
 # 特定ティッカー
@@ -121,12 +169,22 @@ make split ticker=TSLA
 make split-all
 ```
 
-**分割設定:**
-- 訓練データ: 200サンプル/Fold
-- テストデータ: 5サンプル/Fold
-- 分割方式: 最新データから遡って固定ウィンドウ
+**CPCV (Combinatorial Purged Cross-Validation) とは:**
+- 時系列データを **N個のブロック** に分割
+- **K個のテストブロック** をすべての組み合わせ (C(N,K)) で選択
+- **Purging:** テスト期間前後のデータを訓練から除外（ラベル計算期間の重複防止）
+- **Embargo:** テスト直後のデータを訓練から除外（look-ahead bias防止）
 
-**出力:** `data/splits/{ticker}/fold_{N}_train.csv`, `fold_{N}_test.csv`
+**デフォルト設定:**
+- N=10ブロック, K=2テストブロック → **45 folds** (C(10,2))
+- Purge Window: 5サンプル
+- Embargo Window: 3サンプル
+
+**出力:** `data/splits/{ticker}/fold_{0-44}_train.csv`, `fold_{0-44}_test.csv`
+
+**従来のRolling Horizonとの違い:**
+- ❌ **Rolling Horizon:** 固定サイズの移動ウィンドウ（時系列順序のみ考慮）
+- ✅ **CPCV:** すべてのブロック組み合わせ + Purge/Embargo（より厳格なリーク防止）
 
 ---
 
@@ -152,21 +210,24 @@ data_dir: "data"  # データディレクトリのベースパス
 
 ```yaml
 split:
-  method: "rolling_horizon"
-  batch_unit: 200        # 訓練データサイズ (変更可能)
-  horizon: 5             # テストデータサイズ (変更可能)
-  latest_first: true     # 最新データから遡る
+  method: "cpcv"                # CPCV方式（推奨）
+  n_blocks: 10                  # ブロック数
+  n_test_blocks: 2              # テストブロック数 → C(10,2)=45 folds
+  purge_window: 5               # Purge期間（サンプル数）
+  embargo_window: 3             # Embargo期間（サンプル数）
 
 labeling:
   enabled: true
   method: "triple_barrier"
-  upper_return: 0.03     # 利益確定 +3% (変更可能)
-  lower_return: -0.02    # 損切り -2% (変更可能)
-  max_holding_days: 5    # 最大保有日数 (変更可能)
+  upper_return: 0.03            # 利益確定 +3% (変更可能)
+  lower_return: -0.02           # 損切り -2% (変更可能)
+  max_holding_days: 5           # 最大保有日数 (変更可能)
   reference_column: "Close"
   input_data: "data/raw/{ticker}.parquet"
   output_data: "data/processed/{ticker}_features_labeled.csv"
 ```
+
+**注意:** `method: "rolling_horizon"` も選択可能ですが、CPCVを推奨します。
 
 **設定変更後は必ず実行:**
 
@@ -226,13 +287,16 @@ Machine_Learning-based_Quantitative_Trading_Strategies/
 ├── src/
 │   ├── core/
 │   │   ├── __init__.py                # パッケージ初期化
+│   │   ├── backtesting/               # バックテスト機能
+│   │   │   ├── __init__.py
+│   │   │   └── cpcv_splitter.py       # CPCV分割ロジック
 │   │   ├── labeling/                  # ラベリング機能
 │   │   │   ├── __init__.py
 │   │   │   └── triple_barrier_labeler.py
 │   │   ├── utils/                     # ユーティリティ
 │   │   │   ├── __init__.py
 │   │   │   └── io.py                  # I/O処理
-│   │   ├── data_splitter.py           # データ分割
+│   │   ├── data_splitter.py           # データ分割（CPCVエントリーポイント）
 │   │   └── generate_ticker_yaml.py    # 実験設定生成
 │   ├── get_data/
 │   │   ├── __init__.py
@@ -242,7 +306,7 @@ Machine_Learning-based_Quantitative_Trading_Strategies/
 │   │   ├── __init__.py
 │   │   └── base.py                    # BaseModelインターフェース
 │   ├── config_universe.yaml           # ティッカーリスト
-│   └── data_split_labeling.yaml       # パイプライン設定
+│   └── data_split_labeling.yaml       # パイプライン設定（CPCV含む）
 ├── Makefile                           # タスク自動化
 ├── pyproject.toml                     # Python依存関係
 └── README.md
@@ -277,6 +341,7 @@ make chart ticker=NEW_TICKER
 
 ```bash
 # 1. src/data_split_labeling.yaml でパラメータ変更
+#    例: n_blocks: 15, n_test_blocks: 3 → C(15,3)=455 folds
 #    例: upper_return: 0.05 (利益確定を5%に変更)
 vim src/data_split_labeling.yaml
 
@@ -290,6 +355,11 @@ make split ticker=TSLA
 # 4. 全ティッカーで実行
 make full-pipeline
 ```
+
+**CPCV パラメータ調整のヒント:**
+- `n_blocks` を増やす → より細かい時系列分割
+- `n_test_blocks` を増やす → より多くのfolds（計算時間増加）
+- `purge_window`, `embargo_window` を増やす → より保守的なリーク防止
 
 ### コードの品質チェック
 
