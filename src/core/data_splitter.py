@@ -1,360 +1,241 @@
-"""Data Splitter
+"""Rolling Horizon データ分割モジュール.
 
-時系列データの分割を管理するモジュール。
-Rolling Horizon分割をサポート。
+固定ウィンドウサイズでデータを分割し、時系列順序を維持します。
+
+Rolling Horizonの特徴:
+    - 訓練データのサイズが一定（batch_unit）
+    - テストデータのサイズが一定（horizon）
+    - 最新データから遡って分割可能（latest_first=true）
+    
+例（batch_unit=200, horizon=5）:
+    Fold 1: Train [0:200]    Test [200:205]
+    Fold 2: Train [5:205]    Test [205:210]
+    Fold 3: Train [10:210]   Test [210:215]
+
+典型的な使用例:
+    $ python src/core/data_splitter.py \\
+        --config data/experiments/TSLA_experiment.yaml
 """
 
+import argparse
 import json
-import os
-import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
+import numpy as np
 import pandas as pd
-
-# UTF-8出力を強制
-if sys.stdout.encoding != "utf-8":
-    sys.stdout.reconfigure(encoding="utf-8")
-if sys.stderr.encoding != "utf-8":
-    sys.stderr.reconfigure(encoding="utf-8")
-
-# プロジェクトルートをPYTHONPATHに追加
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-
-# ruff: noqa: E402
-from src.core.backtesting.cpcv_splitter import CPCVSplitter
-from src.core.rolling_horizon_splitter import RollingHorizonSplitter
+import yaml
 
 
-def cpcv_split(
-    ticker: str,
-    config: Dict[str, Any],
-    data_dir: str = "data",
-) -> None:
-    """
-    CPCV法によるデータ分割（Combinatorial Purged Cross-Validation）
+def load_config(config_path: str) -> Dict[str, Any]:
+    """実験設定YAMLを読み込む.
 
     Args:
-        ticker: ティッカーシンボル
-        config: 実験設定（n_blocks, n_test_blocks, purge_window, embargo_window）
-        data_dir: データディレクトリ
+        config_path: 実験設定YAMLファイルのパス.
+
+    Returns:
+        設定内容の辞書.
     """
-    print("=" * 60)
-    print(f"CPCV Split: {ticker}")
-    print("=" * 60)
-    print(f"  N Blocks: {config['n_blocks']}")
-    print(f"  N Test Blocks: {config['n_test_blocks']}")
-    print(f"  Purge Window: {config['purge_window']} days")
-    print(f"  Embargo Window: {config['embargo_window']} days")
-    print("=" * 60)
-    print()
-
-    processed_path = os.path.join(data_dir, "processed", f"{ticker}_features_labeled.csv")
-
-    if not os.path.exists(processed_path):
-        raise FileNotFoundError(f"Labeled data not found: {processed_path}")
-
-    print(f"Loading data: {processed_path}")
-
-    # Date列を読み込んでインデックスに設定
-    df = pd.read_csv(processed_path)
-    if "Date" in df.columns:
-        df["Date"] = pd.to_datetime(df["Date"])
-        df.set_index("Date", inplace=True)
-
-    # ラベルがNaNの行を除外 (保有中のサンプル)
-    df = df[df["Label"].notna()]
-
-    print(
-        f"CPCV: {ticker} | Blocks={config['n_blocks']}, Test={config['n_test_blocks']} | Samples={len(df)}"
-    )
-
-    splitter = CPCVSplitter(
-        n_blocks=config["n_blocks"],
-        n_test_blocks=config["n_test_blocks"],
-        purge_window=config["purge_window"],
-        embargo_window=config["embargo_window"],
-    )
-
-    splits_dir = Path(data_dir) / "splits" / ticker
-    splits_dir.mkdir(parents=True, exist_ok=True)
-
-    # Calculate expected folds: C(n_blocks, n_test_blocks)
-    from math import comb
-
-    expected_folds = comb(config["n_blocks"], config["n_test_blocks"])
-
-    fold_idx = 0
-    for train_idx, test_idx in splitter.split(df):
-        train_data = df.iloc[train_idx].copy()
-        test_data = df.iloc[test_idx].copy()
-
-        # インデックスをソート
-        train_data = train_data.sort_index()
-        test_data = test_data.sort_index()
-
-        train_path = splits_dir / f"fold_{fold_idx}_train.csv"
-        train_data.to_csv(train_path, index=True, index_label="Date")
-
-        test_path = splits_dir / f"fold_{fold_idx}_test.csv"
-        test_data.to_csv(test_path, index=True, index_label="Date")
-
-        # Progress every 10 folds
-        if fold_idx % 10 == 0:
-            print(f"  Fold {fold_idx}/{expected_folds} completed")
-
-        fold_idx += 1
-
-    print(f"✅ {fold_idx} folds created for {ticker}")
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
 
 def rolling_horizon_split(
-    ticker: str,
-    config: Dict[str, Any],
-    data_dir: str = "data",
-) -> None:
-    """
-    Rolling Horizon法によるデータ分割（時系列）
+    df: pd.DataFrame,
+    batch_unit: int = 200,
+    horizon: int = 5,
+    latest_first: bool = True,
+    save_dir: Optional[str] = None,
+    date_column: str = "Date",
+    stats_columns: Optional[List[str]] = None,
+) -> List[Dict[str, pd.DataFrame]]:
+    """Rolling Horizon方式でデータを分割.
 
     Args:
-        ticker: ティッカーシンボル
-        config: 実験設定（batch_unit, horizon等）
-        data_dir: データディレクトリ
+        df: 分割対象のDataFrame.
+        batch_unit: 各訓練バッチのサンプル数.
+        horizon: 各テストバッチのサンプル数.
+        latest_first: 最新データから遡るか.
+        save_dir: 保存先ディレクトリ.
+        date_column: 日付列の名前.
+        stats_columns: 統計を計算する列名のリスト.
+
+    Returns:
+        分割結果の辞書のリスト.
     """
-    print("=" * 60)
-    print(f"Rolling Horizon Split: {ticker}")
-    print("=" * 60)
-    print(f"  Batch Unit: {config['batch_unit']}")
-    print(f"  Horizon: {config['horizon']}")
-    print(f"  Latest First: {config.get('latest_first', True)}")
-    print("=" * 60)
-    print()
+    total_samples = len(df)
+    folds = []
+    fold_num = 1
 
-    processed_path = os.path.join(data_dir, "processed", f"{ticker}_features_labeled.csv")
+    if latest_first:
+        # 最新から遡る
+        end_idx = total_samples
+        while end_idx >= batch_unit + horizon:
+            start_idx = end_idx - batch_unit
 
-    if not os.path.exists(processed_path):
-        raise FileNotFoundError(f"Labeled data not found: {processed_path}")
+            train_data = df.iloc[start_idx:end_idx]
+            test_data = df.iloc[end_idx : end_idx + horizon]
 
-    print(f"Loading data: {processed_path}")
+            folds.append({"train": train_data, "test": test_data, "fold": fold_num})
 
-    # ★ 修正: Date列を読み込んでインデックスに設定
-    df = pd.read_csv(processed_path)
+            # Fold詳細ログを削除
+            fold_num += 1
+            end_idx -= horizon
+    else:
+        # 古いデータから進む
+        start_idx = 0
+        while start_idx + batch_unit + horizon <= total_samples:
+            end_idx = start_idx + batch_unit
+
+            train_data = df.iloc[start_idx:end_idx]
+            test_data = df.iloc[end_idx : end_idx + horizon]
+
+            folds.append({"train": train_data, "test": test_data, "fold": fold_num})
+
+            # Fold詳細ログを削除
+            fold_num += 1
+            start_idx += horizon
+
+    # 成功した総Fold数を表示
+    print(f"\n✅ Successfully created {len(folds)} folds")
+    print(f"   Train size per fold: {batch_unit}")
+    print(f"   Test size per fold: {horizon}")
+
+    # 保存処理
+    if save_dir is not None:
+        save_dir = Path(save_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        for fold in folds:
+            fold_dir = save_dir / f"fold_{fold['fold']}"
+            fold_dir.mkdir(parents=True, exist_ok=True)
+
+            # CSV保存
+            fold["train"].to_csv(fold_dir / "train.csv", index=False)
+            fold["test"].to_csv(fold_dir / "test.csv", index=False)
+
+            # 統計情報
+            train_stats = compute_stats(fold["train"], stats_columns)
+            test_stats = compute_stats(fold["test"], stats_columns)
+
+            stats = {"fold": fold["fold"], "train": train_stats, "test": test_stats}
+
+            with open(fold_dir / "stats.json", "w", encoding="utf-8") as f:
+                json.dump(stats, f, indent=2, ensure_ascii=False)
+
+    return folds
+
+
+def compute_stats(df: pd.DataFrame, stats_columns: list) -> Dict[str, Any]:
+    """データの統計情報を計算.
+
+    Args:
+        df: 統計を計算するDataFrame.
+        stats_columns: 統計を計算する列名のリスト.
+
+    Returns:
+        統計情報の辞書.
+    """
+    stats = {"n_samples": len(df)}
+
+    # 日付情報
     if "Date" in df.columns:
-        df["Date"] = pd.to_datetime(df["Date"])
-        df.set_index("Date", inplace=True)
+        stats["start_date"] = df["Date"].min().strftime("%Y-%m-%d")
+        stats["end_date"] = df["Date"].max().strftime("%Y-%m-%d")
 
-    # ★ 追加: ラベルがNaNの行を除外 (保有中のサンプル)
-    df = df[df["Label"].notna()]
+    # 数値列の統計
+    for col in stats_columns:
+        if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+            stats[f"{col}_mean"] = float(df[col].mean())
+            stats[f"{col}_std"] = float(df[col].std())
+            stats[f"{col}_min"] = float(df[col].min())
+            stats[f"{col}_max"] = float(df[col].max())
 
-    print(f"  Labeled samples: {len(df)} (after removing NaN)")
-    print()
+            # Sharpe-like指標（Returnsがある場合）
+            if col == "Returns" and df[col].std() != 0:
+                stats["sharpe_like"] = float(df[col].mean() / df[col].std() * np.sqrt(252))
 
-    splitter = RollingHorizonSplitter(
-        batch_unit=config["batch_unit"],
-        horizon=config["horizon"],
-        latest_first=config.get("latest_first", True),
+    return stats
+
+
+def print_fold_info(fold_idx: int, train_df: pd.DataFrame, test_df: pd.DataFrame) -> None:
+    """Fold情報をコンソールに出力.
+
+    Args:
+        fold_idx: Foldのインデックス.
+        train_df: 訓練データ.
+        test_df: テストデータ.
+    """
+    if "Date" in train_df.columns:
+        train_start = train_df["Date"].min().strftime("%Y-%m-%d")
+        train_end = train_df["Date"].max().strftime("%Y-%m-%d")
+        test_start = test_df["Date"].min().strftime("%Y-%m-%d")
+        test_end = test_df["Date"].max().strftime("%Y-%m-%d")
+
+        print(f"[Fold {fold_idx}] Train: {train_start} ~ {train_end} (N={len(train_df)})")
+        print(f"[Fold {fold_idx}] Test:  {test_start} ~ {test_end} (N={len(test_df)})")
+    else:
+        print(f"[Fold {fold_idx}] Train: N={len(train_df)}")
+        print(f"[Fold {fold_idx}] Test:  N={len(test_df)}")
+
+
+def run_split(config: Dict[str, Any]) -> None:
+    """分割処理を実行."""
+    ticker = config["ticker"]
+    split_config = config["split"]
+
+    # データ読み込み
+    input_path = split_config["input_data"]
+    print(f"📂 Loading data: {input_path}")
+    df = pd.read_csv(input_path)
+
+    # 日付列の処理
+    date_column = split_config.get("date_column", "Date")
+    if date_column in df.columns:
+        df[date_column] = pd.to_datetime(df[date_column])
+        df = df.sort_values(date_column).reset_index(drop=True)
+
+    print(f"\n{'=' * 60}")
+    print(f"Rolling Horizon Split: {ticker}")
+    print(f"  Batch Unit: {split_config['batch_unit']}")
+    print(f"  Horizon: {split_config['horizon']}")
+    print(f"  Latest First: {split_config.get('latest_first', True)}")
+    print(f"{'=' * 60}\n")
+
+    # 分割実行 (dfを渡す)
+    _ = rolling_horizon_split(
+        df=df,  # ← これが必要
+        batch_unit=split_config["batch_unit"],
+        horizon=split_config["horizon"],
+        latest_first=split_config.get("latest_first", True),
+        save_dir=split_config["save_dir"],
+        date_column=date_column,
+        stats_columns=split_config.get("stats_columns", ["Returns", "Close"]),
     )
 
-    splits_dir = Path(data_dir) / "splits" / ticker
-    splits_dir.mkdir(parents=True, exist_ok=True)
-
-    fold_idx = 0
-    for train_idx, test_idx in splitter.split(df):
-        train_data = df.iloc[train_idx]
-        train_path = splits_dir / f"fold_{fold_idx}_train.csv"
-        train_data.to_csv(train_path, index=True, index_label="Date")
-
-        test_data = df.iloc[test_idx]
-        test_path = splits_dir / f"fold_{fold_idx}_test.csv"
-        test_data.to_csv(test_path, index=True, index_label="Date")
-
-        print(f"Fold {fold_idx}:")
-        print(
-            f"  Train: {train_data.index[0]} ~ {train_data.index[-1]} ({len(train_data)} samples)"
-        )
-        print(f"  Test:  {test_data.index[0]} ~ {test_data.index[-1]} ({len(test_data)} samples)")
-        print()
-
-        fold_idx += 1
-
-    print("=" * 60)
-    print(f"✅ {fold_idx} folds created for {ticker}")
-    print(f"   Output: {splits_dir}")
-    print("=" * 60)
+    print(f"\n✅ All splits saved to: {split_config['save_dir']}")
 
 
-class DataSplitter:
-    """
-    データ分割を管理するクラス
-
-    実験設定に基づいてティッカーごとのデータ分割を実行します。
-    """
-
-    def __init__(self, data_dir: str = "data"):
-        """
-        DataSplitterを初期化する。
-
-        Args:
-            data_dir: データディレクトリ
-        """
-        self.data_dir = data_dir
-        self.experiments_dir = Path(data_dir) / "experiments"
-
-    def split_all(self) -> None:
-        """
-        全ティッカーのデータ分割を実行する。
-        """
-        if not self.experiments_dir.exists():
-            raise FileNotFoundError(
-                f"Experiments directory not found: {self.experiments_dir}\n"
-                "Run 'make generate-experiments' first."
-            )
-
-        experiment_files = list(self.experiments_dir.glob("*_experiment.json"))
-
-        if not experiment_files:
-            raise FileNotFoundError(
-                f"No experiment files found in {self.experiments_dir}\n"
-                "Run 'make generate-experiments' first."
-            )
-
-        print(f"📂 Found {len(experiment_files)} experiment configurations")
-        print()
-
-        for exp_file in experiment_files:
-            ticker = exp_file.stem.replace("_experiment", "")
-
-            with open(exp_file, "r") as f:
-                config = json.load(f)
-
-            try:
-                print("━" * 60)
-                print(f"Processing: {ticker}")
-                print("━" * 60)
-
-                method = config["split"].get("method", "cpcv")
-
-                if method == "cpcv":
-                    cpcv_split(
-                        ticker=ticker,
-                        config=config["split"],
-                        data_dir=self.data_dir,
-                    )
-                elif method == "rolling_horizon":
-                    rolling_horizon_split(
-                        ticker=ticker,
-                        config=config["split"],
-                        data_dir=self.data_dir,
-                    )
-                else:
-                    raise ValueError(f"Unknown split method: {method}")
-
-            except Exception as e:
-                print(f"❌ Error processing {ticker}: {e}")
-                continue
-
-    def split_single(self, ticker: str) -> None:
-        """
-        特定ティッカーのデータ分割を実行する。
-
-        Args:
-            ticker: ティッカーシンボル
-        """
-        exp_file = self.experiments_dir / f"{ticker}_experiment.json"
-
-        if not exp_file.exists():
-            raise FileNotFoundError(
-                f"Experiment file not found: {exp_file}\nRun 'make generate-experiments' first."
-            )
-
-        with open(exp_file, "r") as f:
-            config = json.load(f)
-
-        method = config["split"].get("method", "cpcv")
-
-        if method == "cpcv":
-            cpcv_split(
-                ticker=ticker,
-                config=config["split"],
-                data_dir=self.data_dir,
-            )
-        elif method == "rolling_horizon":
-            rolling_horizon_split(
-                ticker=ticker,
-                config=config["split"],
-                data_dir=self.data_dir,
-            )
-        else:
-            raise ValueError(f"Unknown split method: {method}")
-
-    def split_from_config(self, config_path: str) -> None:
-        """
-        実験設定ファイルから直接データ分割を実行する。
-
-        Args:
-            config_path: 実験設定ファイルのパス
-        """
-        config_path = Path(config_path)
-
-        if not config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {config_path}")
-
-        with open(config_path, "r") as f:
-            config = json.load(f)
-
-        ticker = config.get("ticker")
-        if not ticker:
-            raise ValueError(f"'ticker' field not found in config: {config_path}")
-
-        method = config["split"].get("method", "cpcv")
-
-        if method == "cpcv":
-            cpcv_split(
-                ticker=ticker,
-                config=config["split"],
-                data_dir=self.data_dir,
-            )
-        elif method == "rolling_horizon":
-            rolling_horizon_split(
-                ticker=ticker,
-                config=config["split"],
-                data_dir=self.data_dir,
-            )
-        else:
-            raise ValueError(f"Unknown split method: {method}")
-
-
-def main():
-    """
-    CLI エントリーポイント
-
-    Usage:
-        python -m src.core.data_splitter --ticker AAPL
-        python -m src.core.data_splitter --all
-        python -m src.core.data_splitter --config data/experiments/AAPL_experiment.json
-    """
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Split stock data using Rolling Horizon")
-    parser.add_argument("--ticker", type=str, help="Ticker symbol (e.g., AAPL)")
-    parser.add_argument("--all", action="store_true", help="Split all tickers")
-    parser.add_argument("--config", type=str, help="Path to experiment config file")
-    parser.add_argument("--data-dir", type=str, default="data", help="Data directory")
+def main() -> None:
+    """CLIエントリーポイント."""
+    parser = argparse.ArgumentParser(
+        description="Rolling Horizon データ分割を実行",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        required=True,
+        help="実験設定YAMLファイルのパス（例: data/experiments/TSLA_experiment.yaml）",
+    )
 
     args = parser.parse_args()
 
-    splitter = DataSplitter(data_dir=args.data_dir)
+    # 設定読み込み
+    config = load_config(args.config)
 
-    if args.config:
-        # ★ 追加: --config 引数のサポート
-        splitter.split_from_config(args.config)
-    elif args.all:
-        splitter.split_all()
-    elif args.ticker:
-        splitter.split_single(args.ticker)
-    else:
-        parser.print_help()
+    # 分割実行
+    run_split(config)
 
 
 if __name__ == "__main__":
