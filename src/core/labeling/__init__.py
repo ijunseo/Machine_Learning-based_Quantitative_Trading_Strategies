@@ -1,11 +1,7 @@
 """
-ラベリング機能パッケージ
-
-Triple Barrierラベリングなどの教師ラベル生成機能を提供します。
+Labeling module for machine learning-based quantitative trading strategies.
 """
 
 from .triple_barrier_labeler import TripleBarrierLabeler
 
-__all__ = [
-    "TripleBarrierLabeler",
-]
+__all__ = ["TripleBarrierLabeler"]

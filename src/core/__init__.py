@@ -1,10 +1,13 @@
-"""コア機能パッケージ
+"""Core modules for machine learning-based quantitative trading strategies.
 
-データ分割、ラベリング、実験設定生成などの機能を提供します。
+Provides data splitting and rolling horizon splitting functionalities.
 """
 
-from .data_splitter import DataSplitter
+from .data_splitter import DataSplitter, rolling_horizon_split
+from .rolling_horizon_splitter import RollingHorizonSplitter
 
 __all__ = [
     "DataSplitter",
+    "RollingHorizonSplitter",
+    "rolling_horizon_split",
 ]

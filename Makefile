@@ -100,14 +100,26 @@ generate-experiments:
 	  --output-dir data/experiments/
 	@echo "✅ Generated experiment configs in data/experiments/"
 
+# ラベリング (特定ティッカー)
 label:
 	@if [ -z "$(ticker)" ]; then \
-	  echo "❌ Usage: make label ticker=TSLA"; \
+	  echo "❌ Usage: make label ticker=AAPL"; \
 	  exit 1; \
 	fi
 	@echo "🏷️  Labeling data for $(ticker)..."
-	uv run python src/core/labeling/triple_barrier_labeler.py \
-	  --config data/experiments/$(ticker)_experiment.yaml
+	uv run python -m src.core.labeling.triple_barrier_labeler \
+		--ticker $(ticker) \
+		--input data/raw/$(ticker).parquet \
+		--output data/processed/$(ticker)_features_labeled.csv
+
+split:
+	@if [ -z "$(ticker)" ]; then \
+	  echo "❌ Usage: make split ticker=TSLA"; \
+	  exit 1; \
+	fi
+	@echo "📂 Splitting data for $(ticker)..."
+	uv run python src/core/data_splitter.py \
+	  --config data/experiments/$(ticker)_experiment.json
 
 full-pipeline: generate-experiments
 	@echo "🚀 Running full pipeline for all tickers..."
@@ -118,7 +130,10 @@ full-pipeline: generate-experiments
 	  echo "Processing: $$ticker"; \
 	  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
 	  echo "Step 1/2: Labeling..."; \
-	  uv run python src/core/labeling/triple_barrier_labeler.py --config $$config || exit 1; \
+	  uv run python -m src.core.labeling.triple_barrier_labeler \
+	    --ticker $$ticker \
+	    --input data/raw/$${ticker}.parquet \
+	    --output data/processed/$${ticker}_features_labeled.csv || exit 1; \
 	  echo "Step 2/2: Splitting..."; \
 	  uv run python src/core/data_splitter.py --config $$config || exit 1; \
 	  echo "✅ $$ticker completed"; \
@@ -179,9 +194,12 @@ exec:
 	$(DEVCONTAINER_CLI) exec --workspace-folder . $(CMD)
 
 # Relay all other targets into the container
-sync fetch chart lint format fmt format-check \
+sync fetch lint format fmt format-check \
 generate-experiments label split full-pipeline \
 kfold kfold-report:
 	@$(DEVCONTAINER_CLI) exec --workspace-folder . make $@ $(ARGS)
+
+chart:
+	@$(DEVCONTAINER_CLI) exec --workspace-folder . make chart ticker=$(ticker)
 
 endif

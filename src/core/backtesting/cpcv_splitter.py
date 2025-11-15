@@ -170,12 +170,17 @@ def apply_time_based_purging(
 
     Notes:
         テスト期間の直前purge_window期間のデータを訓練から除外。
+        これにより、ラベル計算期間のオーバーラップを防止。
     """
     test_start = test_idx.min()
-    purge_threshold = test_start - purge_window
-
-    # train_idx < purge_threshold のサンプルのみ保持
-    clean_train_idx = train_idx[train_idx < purge_threshold]
+    test_end = test_idx.max()
+    
+    # テスト期間の前後purge_window期間を除外
+    purge_start = test_start - purge_window
+    purge_end = test_end + purge_window
+    
+    # train_idx < purge_start または train_idx > purge_end のサンプルのみ保持
+    clean_train_idx = train_idx[(train_idx < purge_start) | (train_idx > purge_end)]
 
     return clean_train_idx
 
@@ -194,19 +199,16 @@ def apply_embargo(train_idx: np.ndarray, test_idx: np.ndarray, embargo_window: i
 
     Notes:
         テスト期間の直後embargo_window期間のデータを訓練から除外。
-
-    Examples:
-        >>> train_idx = np.arange(100)
-        >>> test_idx = np.arange(50, 70)
-        >>> embargo_window = 5
-        >>> clean_train = apply_embargo(train_idx, test_idx, embargo_window)
-        >>> # test_idx の直後5サンプル（70-75）が除外される
+        Look-ahead biasを防止するため、testの直後データを使用不可にする。
     """
     test_end = test_idx.max()
     embargo_threshold = test_end + embargo_window
 
-    # train_idx > embargo_threshold または train_idx < test_idx.min() のサンプルを保持
+    # テスト開始前、またはembargo期間後のサンプルのみ保持
     test_start = test_idx.min()
+    
+    # train_idx < test_start (テスト前のデータ) または
+    # train_idx > embargo_threshold (embargo期間後のデータ)
     valid_mask = (train_idx < test_start) | (train_idx > embargo_threshold)
     clean_train_idx = train_idx[valid_mask]
 

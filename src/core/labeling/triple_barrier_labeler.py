@@ -1,233 +1,235 @@
-"""Triple-Barrier Labeling モジュール.
+"""
+Triple-Barrier Labeling
 
-金融時系列データに対してTriple-Barrier方式でラベル付けを行います。
-
-Triple-Barrierの仕組み:
-    - Upper Barrier: 利益確定ライン（例: +3%）
-    - Lower Barrier: 損切りライン（例: -2%）
-    - Time Barrier: 最大保有期間（例: 5日）
-    
-    最初にいずれかのバリアに到達した時点でラベル確定:
-        - Upper到達 → Label = 1 (Long推奨)
-        - Lower到達 → Label = -1 (Short推奨)
-        - Time到達  → Label = 0 (Neutral) または現在のリターンの符号
-
-典型的な使用例:
-    $ python src/core/labeling/triple_barrier_labeler.py \\
-        --config data/experiments/TSLA_experiment.yaml
+株価データに対するTriple-Barrier法によるラベリング。
+ポジションの重複を避けるため、max_holding_days間隔でラベルを生成。
 """
 
-import argparse
-import json
-from pathlib import Path
-from typing import Any, Dict
-
+import sys
 import numpy as np
 import pandas as pd
 
-
-def load_config(config_path: str) -> Dict[str, Any]:
-    """実験設定ファイル(JSON or YAML)を読み込む.
-
-    Args:
-        config_path: 実験設定ファイルのパス.
-
-    Returns:
-        設定内容の辞書.
-    """
-    path = Path(config_path)
-
-    if path.suffix == ".json":
-        with open(config_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    else:
-        # YAMLの場合
-        import yaml
-
-        with open(config_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
-
-
-def triple_barrier_label(
-    df: pd.DataFrame,
-    upper_return: float = 0.03,
-    lower_return: float = -0.02,
-    max_holding_days: int = 5,
-    reference_column: str = "Close",
-    include_neutral: bool = True,
-) -> pd.Series:
-    """Triple-Barrier方式でラベルを生成.
-
-    各時点でエントリーした場合、最初にバリアに到達した方向でラベル確定。
-
-    Args:
-        df: 価格データを含むDataFrame.
-        upper_return: 上限バリア（利益確定）の閾値（例: 0.03 = +3%）.
-        lower_return: 下限バリア（損切り）の閾値（例: -0.02 = -2%）.
-        max_holding_days: 最大保有日数（時間バリア）.
-        reference_column: 価格参照列名（通常は"Close"）.
-        include_neutral: Trueの場合、時間切れ時にLabel=0を返す.
-
-    Returns:
-        ラベルのSeries（1: Long, -1: Short, 0: Neutral）.
-    """
-    labels = []
-    prices = df[reference_column].values
-
-    # 未来データが不足する最後の期間は除外
-    for i in range(len(df) - max_holding_days):
-        entry_price = prices[i]
-        upper_barrier = entry_price * (1 + upper_return)
-        lower_barrier = entry_price * (1 + lower_return)
-
-        # 未来の価格を確認
-        future_prices = prices[i + 1 : i + 1 + max_holding_days]
-
-        # バリア到達判定
-        upper_hit_idx = np.where(future_prices >= upper_barrier)[0]
-        lower_hit_idx = np.where(future_prices <= lower_barrier)[0]
-
-        if len(upper_hit_idx) > 0 and len(lower_hit_idx) > 0:
-            # 両方に到達した場合、早い方を採用
-            if upper_hit_idx[0] < lower_hit_idx[0]:
-                labels.append(1)
-            else:
-                labels.append(-1)
-        elif len(upper_hit_idx) > 0:
-            # 上限バリアのみ到達
-            labels.append(1)
-        elif len(lower_hit_idx) > 0:
-            # 下限バリアのみ到達
-            labels.append(-1)
-        else:
-            # どちらにも到達せず（時間切れ）
-            if include_neutral:
-                labels.append(0)
-            else:
-                # ニュートラルなしの場合、最終リターンの符号
-                final_return = (future_prices[-1] / entry_price) - 1
-                labels.append(int(np.sign(final_return)))
-
-    # 残りの期間はNaNで埋める
-    labels.extend([np.nan] * max_holding_days)
-
-    return pd.Series(labels, index=df.index, name="Label")
+# UTF-8出力を強制
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8')
 
 
 class TripleBarrierLabeler:
-    """Triple-Barrier Labeling クラス（パッケージ互換用）.
-
-    Attributes:
-        config (Dict[str, Any]): ラベリング設定.
+    """
+    Triple-Barrier法によるラベリングクラス
+    
+    重複しないラベル生成のため、以下のロジックを実装:
+    1. N日目にポジション進入 → Label生成
+    2. N+1 ~ N+max_holding_days: Label = NaN (保有中)
+    3. N+max_holding_days+1日目: 次のポジション進入可能
     """
 
-    def __init__(self, config: Dict[str, Any]) -> None:
-        """TripleBarrierLabelerを初期化する.
-
-        Args:
-            config: ラベリング設定辞書.
+    def __init__(
+        self,
+        upper_return: float = 0.03,
+        lower_return: float = -0.02,
+        max_holding_days: int = 5,
+        reference_column: str = "Close",
+        label_column: str = "Label",
+        include_neutral: bool = True,
+    ):
         """
-        self.config = config
-
-    def label(self, df: pd.DataFrame) -> pd.Series:
-        """DataFrameにラベリングを適用する.
+        Triple-Barrier Labelerを初期化する。
 
         Args:
-            df: 価格データを含むDataFrame.
+            upper_return: 利益確定閾値 (例: 0.03 = +3%)
+            lower_return: 損切り閾値 (例: -0.02 = -2%)
+            max_holding_days: 最大保有日数
+            reference_column: 基準となる価格列名
+            label_column: 生成するラベル列名
+            include_neutral: Neutral (0) ラベルを含むか
+        """
+        self.upper_return = upper_return
+        self.lower_return = lower_return
+        self.max_holding_days = max_holding_days
+        self.reference_column = reference_column
+        self.label_column = label_column
+        self.include_neutral = include_neutral
+
+    def _calculate_label_from_future(self, entry_price: float, future_prices: pd.Series) -> float:
+        """
+        エントリー時点の価格と未来の価格系列からラベルを計算する。
+        
+        Args:
+            entry_price: t日目の終値 (エントリー価格)
+            future_prices: t+1 ~ t+max_holding_days の価格系列
 
         Returns:
-            ラベルのSeries.
+            1.0 (Long), -1.0 (Short), 0.0 (Neutral), or np.nan
         """
-        return triple_barrier_label(
-            df=df,
-            upper_return=self.config.get("upper_return", 0.03),
-            lower_return=self.config.get("lower_return", -0.02),
-            max_holding_days=self.config.get("max_holding_days", 5),
-            reference_column=self.config.get("reference_column", "Close"),
-            include_neutral=self.config.get("include_neutral", True),
-        )
+        if len(future_prices) < 1:
+            return np.nan
+
+        # NumPy配列に変換
+        future_array = future_prices.values
+        
+        # 未来の各時点でリターンを計算
+        for future_price in future_array:
+            return_rate = (future_price - entry_price) / entry_price
+            
+            # Upper Barrier: 利益確定 → Long推奨
+            if return_rate >= self.upper_return:
+                return 1.0
+            
+            # Lower Barrier: 損切り → Short推奨
+            if return_rate <= self.lower_return:
+                return -1.0
+        
+        # Time Barrier: max_holding_days経過してもバリア未到達 → Neutral
+        if self.include_neutral:
+            return 0.0
+        else:
+            return np.nan
+
+    def _calculate_single_label(self, prices: pd.Series) -> float:
+        """
+        単一ポジションのラベルを計算する（後方互換性のため残す）。
+
+        Args:
+            prices: max_holding_days+1 日分の価格シリーズ
+
+        Returns:
+            1.0 (Long), -1.0 (Short), 0.0 (Neutral), or np.nan
+        """
+        if len(prices) < 2:
+            return np.nan
+
+        # NumPy配列に変換してスカラー値として扱う
+        prices_array = prices.values
+        entry_price = prices_array[0]
+        
+        # entry_price を基準に future (prices[1:]) を評価
+        future_prices = pd.Series(prices_array[1:])
+        return self._calculate_label_from_future(entry_price, future_prices)
+
+    def label_data(self, input_path: str, output_path: str) -> None:
+        """
+        株価データにTriple-Barrierラベリングを適用する。
+        
+        ★ 重要: t日目の特徴量で t+1 ~ t+max_holding_days の未来を予測
+        
+        ラベリングロジック:
+        1. t日目の終値(Close)を基準として記録
+        2. t+1 ~ t+max_holding_days の期間を評価
+        3. 評価期間中に上限/下限バリアに到達 → ラベル確定
+        4. 評価期間終了までバリア未到達 → Neutral (0)
+        
+        ポジション重複を避けるため、max_holding_days間隔でラベル生成
+
+        Args:
+            input_path: 入力Parquetファイルパス
+            output_path: 出力CSVファイルパス
+        """
+        print(f"📂 Parquetを読み込み中: {input_path}")
+        
+        # Parquet読み込み (Dateがインデックス)
+        df = pd.read_parquet(input_path)
+        
+        # MultiIndex列を平坦化 (もし存在する場合)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        
+        # インデックスをリセットしてDate列を作成
+        df = df.reset_index()
+        if 'index' in df.columns:
+            df.rename(columns={'index': 'Date'}, inplace=True)
+        
+        # ラベル列を初期化 (全てNaN)
+        df[self.label_column] = np.nan
+        
+        # ★ 修正: t日目の特徴で t+1 ~ t+max_holding_days の未来を予測
+        labeled_count = 0
+        i = 0
+        while i < len(df) - self.max_holding_days:
+            # t日目 (i) に進入 → t+1 ~ t+max_holding_days (i+1 ~ i+max_holding_days) を評価
+            entry_price = df[self.reference_column].iloc[i]
+            future_window = df[self.reference_column].iloc[i+1:i + self.max_holding_days + 1]
+            
+            # 未来の価格変動を評価してラベル生成
+            label = self._calculate_label_from_future(entry_price, future_window)
+            df.iloc[i, df.columns.get_loc(self.label_column)] = label
+            
+            # ★ 重要: 次のラベルは max_holding_days 後
+            i += self.max_holding_days
+            labeled_count += 1
+            
+            # 進捗表示 (50サンプルごと)
+            if labeled_count % 50 == 0:
+                print(f"  処理中... {labeled_count} サンプル完了")
+            df.iloc[i, df.columns.get_loc(self.label_column)] = label
+        
+        # ラベル分布を表示
+        label_counts = df[self.label_column].value_counts()
+        nan_count = df[self.label_column].isna().sum()
+
+        print()
+        print("=" * 60)
+        print("Label Distribution:")
+        print("=" * 60)
+        if 1.0 in label_counts.index:
+            print(f"  Long (1):       {int(label_counts[1.0]):>5} samples")
+        if -1.0 in label_counts.index:
+            print(f"  Short (-1):     {int(label_counts[-1.0]):>5} samples")
+        if 0.0 in label_counts.index:
+            print(f"  Neutral (0):    {int(label_counts[0.0]):>5} samples")
+        print(f"  Holding (NaN):  {nan_count:>5} samples")
+        print("=" * 60)
+        print()
+
+        # ★ 修正: Date列を含めてCSV保存 (インデックスなし)
+        df.to_csv(output_path, index=False, encoding='utf-8')
+        
+        print(f"✅ Label saved: {output_path}")
+        print(f"   Total samples: {len(df)}")
+        print(f"   Labeled samples: {len(df) - nan_count}")
+        print()
 
 
-def apply_labeling(input_path: str, output_path: str, config: Dict[str, Any]) -> None:
+def main():
     """
-    指定されたCSVファイルにTriple-Barrierラベリングを適用し、結果を保存する。
+    CLI エントリーポイント
+    
+    Usage:
+        python -m src.core.labeling.triple_barrier_labeler \
+            --ticker AAPL \
+            --input data/raw/AAPL.parquet \
+            --output data/processed/AAPL_features_labeled.csv
     """
-    print(f"   📂 Parquetを読み込み中: {input_path}")
-    df = pd.read_parquet(input_path)
-
-    # 日付列の処理
-    if "Date" in df.columns:
-        df["Date"] = pd.to_datetime(df["Date"])
-        df = df.sort_values("Date").reset_index(drop=True)
-
-    # ラベル生成
-    labels = triple_barrier_label(
-        df=df,
-        upper_return=config["upper_return"],
-        lower_return=config["lower_return"],
-        max_holding_days=config["max_holding_days"],
-        reference_column=config["reference_column"],
-        include_neutral=config["include_neutral"],
-    )
-
-    # ラベル列を追加
-    label_column = config.get("label_column", "Label")
-    df[label_column] = labels
-
-    # 保存
-    output_dir = Path(output_path).parent
-    output_dir.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False)
-
-    # 統計情報を表示
-    label_counts = df[label_column].value_counts().sort_index()
-    print("\n📊 ラベル分布:")
-    print(f"   Long (1):    {label_counts.get(1.0, 0):>6} サンプル")
-    print(f"   Short (-1):  {label_counts.get(-1.0, 0):>6} サンプル")
-    print(f"   Neutral (0): {label_counts.get(0.0, 0):>6} サンプル")
-    print(f"   NaN:         {df[label_column].isna().sum():>6} サンプル")
-
-
-def main() -> None:
-    """CLIエントリーポイント."""
-    parser = argparse.ArgumentParser(
-        description="Triple-Barrier Labelingを実行",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "--config",
-        type=str,
-        required=True,
-        help="実験設定ファイルのパス（例: data/experiments/TSLA_experiment.json）",
-    )
-
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Apply Triple-Barrier Labeling")
+    parser.add_argument("--ticker", type=str, required=True, help="Ticker symbol")
+    parser.add_argument("--input", type=str, required=True, help="Input Parquet file")
+    parser.add_argument("--output", type=str, required=True, help="Output CSV file")
+    parser.add_argument("--upper", type=float, default=0.03, help="Upper return threshold")
+    parser.add_argument("--lower", type=float, default=-0.02, help="Lower return threshold")
+    parser.add_argument("--days", type=int, default=5, help="Max holding days")
+    
     args = parser.parse_args()
-
-    # 設定読み込み
-    config = load_config(args.config)
-    ticker = config.get("ticker", "UNKNOWN")
-    labeling_config = config["labeling"]
-
-    if not labeling_config.get("enabled", True):
-        print(f"⚠️  {ticker} のラベリングは無効です")
-        return
-
-    print(f"🏷️  Triple-Barrier Labeling: {ticker}")
-    print(f"   上限: +{labeling_config['upper_return'] * 100:.1f}%")
-    print(f"   下限: {labeling_config['lower_return'] * 100:.1f}%")
-    print(f"   最大保有日数: {labeling_config['max_holding_days']}")
-
-    # 入力パスの生成 (raw parquet)
-    input_path = labeling_config.get("input_data", "data/raw/{ticker}.parquet").format(
-        ticker=ticker
+    
+    labeler = TripleBarrierLabeler(
+        upper_return=args.upper,
+        lower_return=args.lower,
+        max_holding_days=args.days,
     )
-
-    # 出力パスの生成
-    output_path = labeling_config["output_data"].format(ticker=ticker)
-
-    # ラベル付け実行
-    apply_labeling(input_path, output_path, labeling_config)
-    print(f"\n✅ ラベル保存完了: {output_path}")
+    
+    print("=" * 60)
+    print(f"Triple-Barrier Labeling: {args.ticker}")
+    print("=" * 60)
+    print(f"  Upper Barrier: +{args.upper*100:.1f}%")
+    print(f"  Lower Barrier: {args.lower*100:.1f}%")
+    print(f"  Max Holding Days: {args.days}")
+    print("=" * 60)
+    print()
+    
+    labeler.label_data(args.input, args.output)
 
 
 if __name__ == "__main__":
