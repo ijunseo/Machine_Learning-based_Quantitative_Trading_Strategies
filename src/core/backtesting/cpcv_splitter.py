@@ -174,11 +174,11 @@ def apply_time_based_purging(
     """
     test_start = test_idx.min()
     test_end = test_idx.max()
-    
+
     # テスト期間の前後purge_window期間を除外
     purge_start = test_start - purge_window
     purge_end = test_end + purge_window
-    
+
     # train_idx < purge_start または train_idx > purge_end のサンプルのみ保持
     clean_train_idx = train_idx[(train_idx < purge_start) | (train_idx > purge_end)]
 
@@ -206,7 +206,7 @@ def apply_embargo(train_idx: np.ndarray, test_idx: np.ndarray, embargo_window: i
 
     # テスト開始前、またはembargo期間後のサンプルのみ保持
     test_start = test_idx.min()
-    
+
     # train_idx < test_start (テスト前のデータ) または
     # train_idx > embargo_threshold (embargo期間後のデータ)
     valid_mask = (train_idx < test_start) | (train_idx > embargo_threshold)

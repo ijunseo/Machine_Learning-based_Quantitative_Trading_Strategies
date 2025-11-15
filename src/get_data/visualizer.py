@@ -13,7 +13,6 @@ from typing import List, Tuple
 
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 # --- プロジェクトのパス設定 ---
 BASE_PATH = Path(__file__).resolve().parents[2]
@@ -24,29 +23,29 @@ CHARTS_PATH = BASE_PATH / "data" / "charts"
 
 def load_split_data(ticker: str) -> List[Tuple[pd.DataFrame, pd.DataFrame, int]]:
     """CPCV分割データを読み込む.
-    
+
     Args:
         ticker: ティッカーシンボル
-        
+
     Returns:
         List of (train_df, test_df, fold_idx) tuples
     """
     splits_dir = SPLITS_PATH / ticker
     if not splits_dir.exists():
         return []
-    
+
     fold_data = []
     fold_files = sorted(splits_dir.glob("fold_*_train.csv"))
-    
+
     for train_file in fold_files:
         fold_idx = int(train_file.stem.split("_")[1])
         test_file = splits_dir / f"fold_{fold_idx}_test.csv"
-        
+
         if test_file.exists():
             train_df = pd.read_csv(train_file, parse_dates=["Date"], index_col="Date")
             test_df = pd.read_csv(test_file, parse_dates=["Date"], index_col="Date")
             fold_data.append((train_df, test_df, fold_idx))
-    
+
     return fold_data
 
 
@@ -69,7 +68,7 @@ def visualize_stock_data(ticker: str) -> None:
 
     # --- CPCV分割データを読み込む ---
     fold_data = load_split_data(ticker)
-    
+
     if not fold_data:
         print(f"⚠️  警告: CPCV分割データが見つかりません (data/splits/{ticker}/)")
         print("通常のラベル付きチャートのみを生成します...")
@@ -80,7 +79,7 @@ def visualize_stock_data(ticker: str) -> None:
         for train_df, test_df, _ in fold_data:
             all_train_test_dates.extend(train_df.index.tolist())
             all_train_test_dates.extend(test_df.index.tolist())
-        
+
         if all_train_test_dates:
             min_date = min(all_train_test_dates)
             max_date = max(all_train_test_dates)
@@ -109,14 +108,19 @@ def visualize_stock_data(ticker: str) -> None:
     )
 
     # 2. CPCV分割の可視化
-    colors = ["rgba(0, 123, 255, 0.15)", "rgba(40, 167, 69, 0.15)", 
-              "rgba(255, 193, 7, 0.15)", "rgba(220, 53, 69, 0.15)",
-              "rgba(108, 117, 125, 0.15)", "rgba(23, 162, 184, 0.15)",
-              "rgba(111, 66, 193, 0.15)"]
-    
+    colors = [
+        "rgba(0, 123, 255, 0.15)",
+        "rgba(40, 167, 69, 0.15)",
+        "rgba(255, 193, 7, 0.15)",
+        "rgba(220, 53, 69, 0.15)",
+        "rgba(108, 117, 125, 0.15)",
+        "rgba(23, 162, 184, 0.15)",
+        "rgba(111, 66, 193, 0.15)",
+    ]
+
     for idx, (train_df, test_df, fold_idx) in enumerate(fold_data):
         color = colors[fold_idx % len(colors)]
-        
+
         # Train期間を塗りつぶし
         fig.add_vrect(
             x0=train_df.index.min(),
@@ -128,7 +132,7 @@ def visualize_stock_data(ticker: str) -> None:
             annotation_position="top left",
             annotation_font_size=10,
         )
-        
+
         # Test期間を強調
         fig.add_vrect(
             x0=test_df.index.min(),
@@ -146,7 +150,7 @@ def visualize_stock_data(ticker: str) -> None:
     # 3. ラベル別のマーカーを追加（NaN以外のみ）
     if "Label" in df.columns:
         df_labeled = df[df["Label"].notna()].copy()
-        
+
         # Long (Label = 1)
         long_data = df_labeled[df_labeled["Label"] == 1.0]
         if not long_data.empty:
@@ -223,15 +227,15 @@ def visualize_stock_data(ticker: str) -> None:
     stats_text += f"Short: {label_counts.get(-1.0, 0)} | "
     stats_text += f"Neutral: {label_counts.get(0.0, 0)} | "
     stats_text += f"保有中: {df['Label'].isna().sum()}"
-    
+
     if fold_data:
         stats_text += f" | Folds: {len(fold_data)}"
 
     # --- チャートレイアウトの設定 ---
     fig.update_layout(
         title=f"{ticker} CPCV分割 & Triple-Barrier ラベリング結果<br>"
-              f"<sub>{stats_text}</sub><br>"
-              f"<sub>🟢 Long | 🔴 Short | ⚪ Neutral | 色付き背景: Train/Test期間</sub>",
+        f"<sub>{stats_text}</sub><br>"
+        f"<sub>🟢 Long | 🔴 Short | ⚪ Neutral | 色付き背景: Train/Test期間</sub>",
         yaxis_title="株価 (USD)",
         xaxis_title="日付",
         xaxis_rangeslider_visible=False,
