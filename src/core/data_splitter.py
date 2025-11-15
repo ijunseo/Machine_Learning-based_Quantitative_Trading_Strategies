@@ -181,14 +181,14 @@ def print_fold_info(fold_idx: int, train_df: pd.DataFrame, test_df: pd.DataFrame
 
 class DataSplitter:
     """データ分割クラス（Rolling Horizon方式）。
-    
+
     Attributes:
         config (Dict[str, Any]): 分割設定。
     """
-    
+
     def __init__(self, config: Dict[str, Any]) -> None:
         """DataSplitterを初期化する。
-        
+
         Args:
             config: 分割設定辞書。
         """
@@ -196,7 +196,7 @@ class DataSplitter:
 
     def split(self, data: pd.DataFrame) -> None:
         """データを分割する。
-        
+
         Args:
             data: 分割対象のDataFrame。
         """

@@ -4,16 +4,16 @@
 分類指標と金融指標を計算する関数群。
 """
 
-from typing import Optional, List
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
+    confusion_matrix,
+    f1_score,
     precision_score,
     recall_score,
-    f1_score,
-    confusion_matrix,
 )
 
 

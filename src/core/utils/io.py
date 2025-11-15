@@ -4,10 +4,10 @@ I/Oユーティリティモジュール
 設定ファイルの読み込み、データの保存/読み込みなどの共通処理を提供します。
 """
 
+import json
 from pathlib import Path
 from typing import Any, Dict
 
-import json
 import pandas as pd
 import yaml
 

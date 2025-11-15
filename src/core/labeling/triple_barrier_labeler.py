@@ -116,25 +116,25 @@ def triple_barrier_label(
 
 class TripleBarrierLabeler:
     """Triple-Barrier Labeling クラス（パッケージ互換用）.
-    
+
     Attributes:
         config (Dict[str, Any]): ラベリング設定.
     """
-    
+
     def __init__(self, config: Dict[str, Any]) -> None:
         """TripleBarrierLabelerを初期化する.
-        
+
         Args:
             config: ラベリング設定辞書.
         """
         self.config = config
-    
+
     def label(self, df: pd.DataFrame) -> pd.Series:
         """DataFrameにラベリングを適用する.
-        
+
         Args:
             df: 価格データを含むDataFrame.
-        
+
         Returns:
             ラベルのSeries.
         """

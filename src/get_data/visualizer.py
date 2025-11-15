@@ -21,7 +21,7 @@ CHARTS_PATH = BASE_PATH / "charts"
 
 def visualize_stock_data(ticker: str) -> None:
     """指定されたティッカーのローソク足チャートを生成してHTMLファイルとして保存する.
-    
+
     Args:
         ticker: ティッカーシンボル（例: "AAPL"）.
     """
