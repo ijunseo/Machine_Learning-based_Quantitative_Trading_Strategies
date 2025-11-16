@@ -53,6 +53,12 @@ make up
 
 ホストOSのターミナルから、コンテナ内部のコマンドを意識せず、直接 `make` コマンドを実行します。
 
+**Windows PowerShellの場合:**
+```powershell
+# 日本語の文字化けを防ぐため、最初に実行してください
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+```
+
 ---
 
 ## 📊 データパイプライン
@@ -62,6 +68,9 @@ make up
 ```bash
 # 全ティッカーの株価データを取得 (Yahoo Finance)
 make fetch
+
+# Windowsの場合、必要に応じてデータディレクトリを作成
+mkdir data\processed -Force
 ```
 
 **データ保存先:** `data/raw/{ticker}.parquet`
@@ -94,13 +103,15 @@ make full-pipeline
 - Embargo Window: 3サンプル
 - **生成Folds:** C(10,2) = **45 folds/ticker**
 
+**⚠️ 注意:** `make chart` を実行する前に、必ず `make full-pipeline` を実行してください。
+
 ---
 
 ### 3. データの可視化 (CPCV分割 + ラベリング結果)
 
 ```bash
 # 特定ティッカーのインタラクティブチャート生成
-make chart ticker=TSLA
+make chart ticker=AAPL
 ```
 
 **出力先:** `data/charts/{ticker}_cpcv_chart.html`
@@ -144,7 +155,7 @@ make generate-experiments
 
 ```bash
 # 特定ティッカー
-make label ticker=TSLA
+make label ticker=AAPL
 
 # 全ティッカー
 make label-all
@@ -163,7 +174,7 @@ make label-all
 
 ```bash
 # 特定ティッカー
-make split ticker=TSLA
+make split ticker=AAPL
 
 # 全ティッカー
 make split-all
@@ -349,8 +360,8 @@ vim src/data_split_labeling.yaml
 make generate-experiments
 
 # 3. 特定ティッカーで検証
-make label ticker=TSLA
-make split ticker=TSLA
+make label ticker=AAPL
+make split ticker=AAPL
 
 # 4. 全ティッカーで実行
 make full-pipeline
