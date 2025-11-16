@@ -6,11 +6,18 @@ yfinanceを使用してティッカーの株価データを取得し、Parquet�
     $ python src/get_data/fetcher.py
 """
 
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
 import yaml
 import yfinance as yf
+
+# UTF-8出力を強制
+if sys.stdout.encoding != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8")
+if sys.stderr.encoding != "utf-8":
+    sys.stderr.reconfigure(encoding="utf-8")
 
 # プロジェクトのルートディレクトリを基準にパスを設定
 # CONFIG_PATH が src/config_universe.yaml に変更
