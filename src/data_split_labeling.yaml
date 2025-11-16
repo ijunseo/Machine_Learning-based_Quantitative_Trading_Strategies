@@ -2,17 +2,20 @@
 # 各ティッカーの実験設定生成時のベーステンプレートとして使用
 
 split:
-  # 分割方式: rolling_horizon (固定ウィンドウ)
-  method: "rolling_horizon"
+  # 分割方式: cpcv (Combinatorial Purged Cross-Validation)
+  method: "cpcv"
   
-  # 各バッチの訓練データサンプル数
-  batch_unit: 200
+  # 全ブロック数
+  n_blocks: 10
   
-  # テスト期間の長さ（サンプル数）
-  horizon: 5
+  # テストに使用するブロック数
+  n_test_blocks: 2
   
-  # 最新データから遡って分割するか
-  latest_first: true
+  # Purging期間（日数） - ラベルの最大保有期間と同じ
+  purge_window: 5
+  
+  # Embargo期間（日数） - 追加の安全マージン
+  embargo_window: 3
   
   # 出力ディレクトリ（ティッカー名が自動追加される）
   save_dir: "data/splits/{ticker}"
